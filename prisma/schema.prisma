@@ -1,0 +1,163 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  name      String
+  role      String   @default("EMPLOYEE") // ADMIN, EMPLOYEE
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  sentCampaigns     Campaign[]
+  sentMessages      Message[]
+  assignedLeads     Lead[]
+  activities        Activity[]
+}
+
+model Contact {
+  id          String   @id @default(cuid())
+  phone       String   @unique
+  name        String?
+  email       String?
+  isActive    Boolean  @default(true)
+  tags        String?  // JSON string of tags array
+  lastContact DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  messages    Message[]
+  leads       Lead[]
+  campaigns   CampaignContact[]
+}
+
+model Campaign {
+  id          String   @id @default(cuid())
+  name        String
+  type        String   // SMS, WHATSAPP
+  message     String
+  status      String   @default("DRAFT") // DRAFT, SCHEDULED, RUNNING, COMPLETED, PAUSED, CANCELLED
+  scheduledAt DateTime?
+  sentAt      DateTime?
+  totalSent   Int      @default(0)
+  totalDelivered Int   @default(0)
+  totalReplies   Int   @default(0)
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  createdBy   User              @relation(fields: [createdById], references: [id])
+  contacts    CampaignContact[]
+  messages    Message[]
+}
+
+model CampaignContact {
+  id         String   @id @default(cuid())
+  campaignId String
+  contactId  String
+  status     String   @default("PENDING") // PENDING, SENT, DELIVERED, READ, FAILED, REPLIED
+  sentAt     DateTime?
+  deliveredAt DateTime?
+  readAt     DateTime?
+  repliedAt  DateTime?
+  createdAt  DateTime @default(now())
+
+  // Relations
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  contact    Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, contactId])
+}
+
+model Message {
+  id         String   @id @default(cuid())
+  type       String   // SMS, WHATSAPP
+  direction  String   // OUTBOUND, INBOUND
+  content    String
+  status     String   @default("PENDING") // PENDING, SENT, DELIVERED, READ, FAILED, REPLIED
+  contactId  String
+  campaignId String?
+  sentById   String?
+  sentAt     DateTime?
+  deliveredAt DateTime?
+  readAt     DateTime?
+  createdAt  DateTime @default(now())
+
+  // Relations
+  contact    Contact   @relation(fields: [contactId], references: [id])
+  campaign   Campaign? @relation(fields: [campaignId], references: [id])
+  sentBy     User?     @relation(fields: [sentById], references: [id])
+}
+
+model Lead {
+  id          String   @id @default(cuid())
+  name        String
+  phone       String
+  email       String?
+  loanType    String   // PERSONAL, BUSINESS, HOME, VEHICLE, EDUCATION
+  loanAmount  Float
+  status      String   @default("NEW") // NEW, CONTACTED, INTERESTED, QUALIFIED, PROPOSAL_SENT, NEGOTIATION, CLOSED_WON, CLOSED_LOST
+  priority    String   @default("MEDIUM") // LOW, MEDIUM, HIGH, URGENT
+  source      String?
+  notes       String?
+  assignedToId String?
+  contactId   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  assignedTo  User?    @relation(fields: [assignedToId], references: [id])
+  contact     Contact? @relation(fields: [contactId], references: [id])
+  activities  Activity[]
+}
+
+model Activity {
+  id        String   @id @default(cuid())
+  type      String   // CALL, EMAIL, SMS, WHATSAPP, MEETING, NOTE, TASK
+  title     String
+  description String?
+  leadId    String?
+  userId    String
+  createdAt DateTime @default(now())
+
+  // Relations
+  lead      Lead? @relation(fields: [leadId], references: [id])
+  user      User  @relation(fields: [userId], references: [id])
+}
+
+model DataImport {
+  id          String   @id @default(cuid())
+  filename    String
+  totalRows   Int
+  processedRows Int    @default(0)
+  successRows   Int    @default(0)
+  errorRows     Int    @default(0)
+  status      String   @default("PROCESSING") // PROCESSING, COMPLETED, FAILED
+  errors      String?  // JSON string of errors array
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model CronJob {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  schedule    String   // Cron expression
+  isActive    Boolean  @default(true)
+  lastRun     DateTime?
+  nextRun     DateTime?
+  status      String   @default("IDLE") // IDLE, RUNNING, COMPLETED, FAILED
+  config      String?  // JSON configuration
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
