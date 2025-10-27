@@ -1,47 +1,95 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { PrismaClient } from '@prisma/client'
+
+const prisma = new PrismaClient()
 
 export async function POST(request: NextRequest) {
   try {
     const { contacts, filename } = await request.json()
 
+    console.log(`📥 Contact import started - ${contacts?.length || 0} contacts from ${filename || 'unknown file'}`)
+
     if (!contacts || !Array.isArray(contacts)) {
+      console.error('❌ Invalid contacts data provided')
       return NextResponse.json(
         { message: 'Invalid contacts data' },
         { status: 400 }
       )
     }
 
-    // In a real application, you would:
-    // 1. Validate the user's authentication
-    // 2. Save contacts to the database using Prisma
-    // 3. Handle duplicates and conflicts
-    // 4. Create import record for tracking
+    // Process contacts in batches to avoid overwhelming the database
+    const batchSize = 100
+    const results = []
 
-    // Mock implementation
-    const importRecord = {
-      id: `import_${Date.now()}`,
-      filename: filename || 'unknown.csv',
-      totalRows: contacts.length,
-      processedRows: contacts.length,
-      successRows: contacts.length,
-      errorRows: 0,
-      status: 'COMPLETED',
-      createdAt: new Date().toISOString()
+    for (let i = 0; i < contacts.length; i += batchSize) {
+      const batch = contacts.slice(i, i + batchSize)
+      
+      const batchResults = await Promise.allSettled(
+        batch.map(async (contact: any) => {
+          try {
+            // Check if contact already exists
+            const existingContact = await prisma.contact.findFirst({
+              where: {
+                OR: [
+                  { phone: contact.phone },
+                  { email: contact.email }
+                ]
+              }
+            })
+
+            if (existingContact) {
+              // Update existing contact
+              return await prisma.contact.update({
+                where: { id: existingContact.id },
+                data: {
+                  name: contact.name,
+                  phone: contact.phone,
+                  email: contact.email,
+                  tags: contact.tags || [],
+                  updatedAt: new Date()
+                }
+              })
+            } else {
+              // Create new contact
+              return await prisma.contact.create({
+                data: {
+                  name: contact.name,
+                  phone: contact.phone,
+                  email: contact.email,
+                  tags: contact.tags || [],
+                  source: 'CSV_IMPORT',
+                  status: 'ACTIVE'
+                }
+              })
+            }
+          } catch (error) {
+            console.error('Error processing contact:', error)
+            throw error
+          }
+        })
+      )
+
+      results.push(...batchResults)
     }
 
-    // Simulate processing time
-    await new Promise(resolve => setTimeout(resolve, 1000))
+    const successful = results.filter(result => result.status === 'fulfilled').length
+    const failed = results.filter(result => result.status === 'rejected').length
+
+    console.log(`✅ Contact import completed - ${successful} successful, ${failed} failed out of ${contacts.length} total`)
 
     return NextResponse.json({
-      message: 'Contacts imported successfully',
-      importRecord,
-      importedCount: contacts.length
+      message: 'Import completed',
+      stats: {
+        total: contacts.length,
+        successful,
+        failed
+      }
     })
 
   } catch (error) {
-    console.error('Contact import error:', error)
+    console.error('❌ Contact import failed:', error)
     return NextResponse.json(
-      { message: 'Failed to import contacts' },
+      { message: 'Import failed', error: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     )
   }

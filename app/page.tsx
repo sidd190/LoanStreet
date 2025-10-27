@@ -1,6 +1,7 @@
 'use client'
 
 import { motion } from 'framer-motion'
+import { useState, useEffect } from 'react'
 import { 
   CheckCircle, 
   Clock, 
@@ -13,54 +14,103 @@ import {
   MapPin,
   CreditCard,
   Calculator,
-  FileText
+  FileText,
+  TrendingUp,
+  Award,
+  Zap,
+  Target
 } from 'lucide-react'
 import Link from 'next/link'
+import Navbar from './components/Navbar'
+import Footer from './components/Footer'
+import AnimatedSection from './components/AnimatedSection'
 
 export default function HomePage() {
+  const [loanAmount, setLoanAmount] = useState(250000)
+  const [tenure, setTenure] = useState(3)
+  const [emi, setEmi] = useState(8456)
+
+  useEffect(() => {
+    const rate = 12 / 100 / 12
+    const months = tenure * 12
+    const calculatedEmi = (loanAmount * rate * Math.pow(1 + rate, months)) / (Math.pow(1 + rate, months) - 1)
+    setEmi(Math.round(calculatedEmi))
+  }, [loanAmount, tenure])
+
   return (
     <div className="min-h-screen">
-      {/* Navigation */}
-      <nav className="bg-white shadow-sm sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center">
-              <h1 className="text-2xl font-bold text-primary-600">QuickLoan</h1>
-            </div>
-            <div className="hidden md:flex items-center space-x-8">
-              <a href="#services" className="text-gray-700 hover:text-primary-600">Services</a>
-              <a href="#about" className="text-gray-700 hover:text-primary-600">About</a>
-              <a href="#contact" className="text-gray-700 hover:text-primary-600">Contact</a>
-              <Link href="/admin" className="btn-primary">Admin Login</Link>
-            </div>
-          </div>
-        </div>
-      </nav>
+      <Navbar />
 
       {/* Hero Section */}
-      <section className="gradient-bg text-white py-20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <section className="relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-primary-900 via-primary-800 to-primary-700">
+          <div className="absolute inset-0 opacity-20"></div>
+        </div>
+        
+        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 lg:py-32">
           <div className="grid lg:grid-cols-2 gap-12 items-center">
             <motion.div
               initial={{ opacity: 0, x: -50 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.8 }}
+              className="text-white"
             >
-              <h1 className="text-5xl lg:text-6xl font-bold mb-6">
-                Get Your Dream Loan in 
-                <span className="text-yellow-400"> 24 Hours</span>
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 }}
+                className="inline-flex items-center bg-secondary-500/20 text-secondary-300 px-4 py-2 rounded-full text-sm font-medium mb-6"
+              >
+                <Zap className="w-4 h-4 mr-2" />
+                RBI Licensed & Trusted by 10,000+ Customers
+              </motion.div>
+              
+              <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-6 leading-tight">
+                Get Your Dream Loan in{' '}
+                <span className="bg-gradient-to-r from-yellow-400 to-orange-400 bg-clip-text text-transparent">
+                  24 Hours
+                </span>
               </h1>
-              <p className="text-xl mb-8 text-blue-100">
+              
+              <p className="text-xl mb-8 text-blue-100 leading-relaxed">
                 Instant approval, minimal documentation, and competitive interest rates. 
                 Your financial freedom is just one click away.
               </p>
-              <div className="flex flex-col sm:flex-row gap-4">
-                <button className="bg-yellow-400 hover:bg-yellow-500 text-primary-900 font-bold py-4 px-8 rounded-lg text-lg transition-all duration-200 shadow-lg hover:shadow-xl">
-                  Apply Now
-                </button>
-                <button className="border-2 border-white text-white hover:bg-white hover:text-primary-600 font-semibold py-4 px-8 rounded-lg text-lg transition-all duration-200">
-                  Calculate EMI
-                </button>
+              
+              <div className="flex flex-col sm:flex-row gap-4 mb-8">
+                <Link href="/apply">
+                  <motion.button
+                    whileHover={{ scale: 1.05, y: -2 }}
+                    whileTap={{ scale: 0.95 }}
+                    className="bg-gradient-to-r from-yellow-400 to-orange-400 hover:from-yellow-500 hover:to-orange-500 text-primary-900 font-bold py-4 px-8 rounded-xl text-lg transition-all duration-300 shadow-lg hover:shadow-2xl"
+                  >
+                    Apply Now
+                  </motion.button>
+                </Link>
+                <Link href="/calculator">
+                  <motion.button
+                    whileHover={{ scale: 1.05, y: -2 }}
+                    whileTap={{ scale: 0.95 }}
+                    className="border-2 border-white text-white hover:bg-white hover:text-primary-600 font-semibold py-4 px-8 rounded-xl text-lg transition-all duration-300 backdrop-blur-sm"
+                  >
+                    Calculate EMI
+                  </motion.button>
+                </Link>
+              </div>
+
+              <div className="flex items-center space-x-8 text-sm">
+                <div className="flex items-center">
+                  <Shield className="w-5 h-5 text-secondary-400 mr-2" />
+                  <span>100% Secure</span>
+                </div>
+                <div className="flex items-center">
+                  <Clock className="w-5 h-5 text-secondary-400 mr-2" />
+                  <span>Quick Approval</span>
+                </div>
+                <div className="flex items-center">
+                  <Award className="w-5 h-5 text-secondary-400 mr-2" />
+                  <span>4.9★ Rating</span>
+                </div>
               </div>
             </motion.div>
             
@@ -70,356 +120,153 @@ export default function HomePage() {
               transition={{ duration: 0.8, delay: 0.2 }}
               className="relative"
             >
-              <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-8 border border-white/20">
-                <h3 className="text-2xl font-bold mb-6">Quick Loan Calculator</h3>
-                <div className="space-y-4">
+              <div className="bg-white/10 backdrop-blur-lg rounded-3xl p-8 border border-white/20 shadow-2xl">
+                <h3 className="text-2xl font-bold mb-6 text-white">Quick Loan Calculator</h3>
+                <div className="space-y-6">
                   <div>
-                    <label className="block text-sm font-medium mb-2">Loan Amount</label>
-                    <input type="range" min="50000" max="5000000" className="w-full" />
-                    <div className="flex justify-between text-sm mt-1">
+                    <label className="block text-sm font-medium mb-3 text-white">
+                      Loan Amount: ₹{loanAmount.toLocaleString()}
+                    </label>
+                    <input 
+                      type="range" 
+                      min="50000" 
+                      max="5000000" 
+                      step="25000"
+                      value={loanAmount}
+                      onChange={(e) => setLoanAmount(Number(e.target.value))}
+                      className="w-full h-2 bg-white/20 rounded-lg appearance-none cursor-pointer slider"
+                    />
+                    <div className="flex justify-between text-xs mt-2 text-blue-200">
                       <span>₹50K</span>
-                      <span className="font-bold">₹2,50,000</span>
                       <span>₹50L</span>
                     </div>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium mb-2">Tenure (Years)</label>
-                    <input type="range" min="1" max="7" className="w-full" />
-                    <div className="flex justify-between text-sm mt-1">
+                    <label className="block text-sm font-medium mb-3 text-white">
+                      Tenure: {tenure} Years
+                    </label>
+                    <input 
+                      type="range" 
+                      min="1" 
+                      max="7" 
+                      value={tenure}
+                      onChange={(e) => setTenure(Number(e.target.value))}
+                      className="w-full h-2 bg-white/20 rounded-lg appearance-none cursor-pointer slider"
+                    />
+                    <div className="flex justify-between text-xs mt-2 text-blue-200">
                       <span>1 Year</span>
-                      <span className="font-bold">3 Years</span>
                       <span>7 Years</span>
                     </div>
                   </div>
-                  <div className="bg-yellow-400 text-primary-900 p-4 rounded-lg mt-6">
+                  <motion.div
+                    key={emi}
+                    initial={{ scale: 0.9 }}
+                    animate={{ scale: 1 }}
+                    className="bg-gradient-to-r from-yellow-400 to-orange-400 text-primary-900 p-6 rounded-2xl mt-6"
+                  >
                     <div className="text-center">
-                      <p className="text-sm">Monthly EMI</p>
-                      <p className="text-2xl font-bold">₹8,456</p>
+                      <p className="text-sm font-medium">Monthly EMI</p>
+                      <p className="text-3xl font-bold">₹{emi.toLocaleString()}</p>
+                      <p className="text-xs mt-1">Interest Rate: 12% p.a.</p>
                     </div>
-                  </div>
+                  </motion.div>
                 </div>
               </div>
+              
+              <motion.div
+                animate={{ y: [0, -10, 0] }}
+                transition={{ duration: 3, repeat: Infinity }}
+                className="absolute -top-4 -right-4 bg-secondary-500 text-white p-3 rounded-full shadow-lg"
+              >
+                <TrendingUp className="w-6 h-6" />
+              </motion.div>
+              <motion.div
+                animate={{ y: [0, 10, 0] }}
+                transition={{ duration: 4, repeat: Infinity }}
+                className="absolute -bottom-4 -left-4 bg-yellow-400 text-primary-900 p-3 rounded-full shadow-lg"
+              >
+                <Target className="w-6 h-6" />
+              </motion.div>
             </motion.div>
           </div>
         </div>
       </section>
 
       {/* Features Section */}
-      <section className="py-20 bg-gray-50">
+      <section className="py-20 bg-gradient-to-b from-gray-50 to-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <motion.div
-            initial={{ opacity: 0, y: 50 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8 }}
-            className="text-center mb-16"
-          >
-            <h2 className="text-4xl font-bold text-gray-900 mb-4">Why Choose QuickLoan?</h2>
+          <AnimatedSection className="text-center mb-16">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.8 }}
+              whileInView={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.6 }}
+              className="inline-flex items-center bg-primary-100 text-primary-700 px-4 py-2 rounded-full text-sm font-medium mb-4"
+            >
+              <Star className="w-4 h-4 mr-2" />
+              Why 10,000+ Customers Trust Us
+            </motion.div>
+            <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4">
+              Why Choose QuickLoan?
+            </h2>
             <p className="text-xl text-gray-600 max-w-3xl mx-auto">
               We make lending simple, fast, and transparent with cutting-edge technology and customer-first approach.
             </p>
-          </motion.div>
+          </AnimatedSection>
 
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
             {[
               {
                 icon: Clock,
                 title: "24-Hour Approval",
-                description: "Get your loan approved within 24 hours with our streamlined process"
+                description: "Get your loan approved within 24 hours with our streamlined process",
+                color: "from-blue-500 to-blue-600"
               },
               {
                 icon: Shield,
                 title: "100% Secure",
-                description: "Bank-grade security ensures your personal and financial data is protected"
+                description: "Bank-grade security ensures your personal and financial data is protected",
+                color: "from-green-500 to-green-600"
               },
               {
                 icon: CheckCircle,
                 title: "Minimal Documentation",
-                description: "Just basic documents required. No lengthy paperwork or hidden charges"
+                description: "Just basic documents required. No lengthy paperwork or hidden charges",
+                color: "from-purple-500 to-purple-600"
               },
               {
                 icon: Users,
                 title: "Expert Support",
-                description: "Dedicated relationship managers to guide you through every step"
+                description: "Dedicated relationship managers to guide you through every step",
+                color: "from-orange-500 to-orange-600"
               }
             ].map((feature, index) => (
-              <motion.div
-                key={index}
-                initial={{ opacity: 0, y: 30 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6, delay: index * 0.1 }}
-                className="card text-center hover:shadow-xl transition-all duration-300"
-              >
-                <feature.icon className="w-12 h-12 text-primary-600 mx-auto mb-4" />
-                <h3 className="text-xl font-semibold mb-3">{feature.title}</h3>
-                <p className="text-gray-600">{feature.description}</p>
-              </motion.div>
+              <AnimatedSection key={index} delay={index * 0.1}>
+                <motion.div
+                  whileHover={{ 
+                    y: -10,
+                    transition: { duration: 0.3 }
+                  }}
+                  className="group relative bg-white rounded-2xl p-8 shadow-lg hover:shadow-2xl transition-all duration-300 border border-gray-100"
+                >
+                  <div className={`absolute inset-0 bg-gradient-to-r ${feature.color} opacity-0 group-hover:opacity-5 rounded-2xl transition-opacity duration-300`}></div>
+                  <motion.div
+                    whileHover={{ scale: 1.1, rotate: 5 }}
+                    className={`w-16 h-16 bg-gradient-to-r ${feature.color} rounded-2xl flex items-center justify-center mb-6 mx-auto`}
+                  >
+                    <feature.icon className="w-8 h-8 text-white" />
+                  </motion.div>
+                  <h3 className="text-xl font-bold mb-4 text-gray-900 group-hover:text-primary-600 transition-colors">
+                    {feature.title}
+                  </h3>
+                  <p className="text-gray-600 leading-relaxed">{feature.description}</p>
+                </motion.div>
+              </AnimatedSection>
             ))}
           </div>
         </div>
       </section>
 
-      {/* Services Section */}
-      <section id="services" className="py-20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <motion.div
-            initial={{ opacity: 0, y: 50 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8 }}
-            className="text-center mb-16"
-          >
-            <h2 className="text-4xl font-bold text-gray-900 mb-4">Our Loan Services</h2>
-            <p className="text-xl text-gray-600">Tailored financial solutions for every need</p>
-          </motion.div>
-
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {[
-              {
-                icon: CreditCard,
-                title: "Personal Loans",
-                amount: "₹50K - ₹50L",
-                rate: "10.99% onwards",
-                features: ["No collateral required", "Flexible tenure", "Quick disbursal"]
-              },
-              {
-                icon: Calculator,
-                title: "Business Loans",
-                amount: "₹1L - ₹1Cr",
-                rate: "12.99% onwards", 
-                features: ["Working capital", "Equipment financing", "Business expansion"]
-              },
-              {
-                icon: FileText,
-                title: "Home Loans",
-                amount: "₹5L - ₹5Cr",
-                rate: "8.99% onwards",
-                features: ["Low interest rates", "Long tenure", "Tax benefits"]
-              }
-            ].map((service, index) => (
-              <motion.div
-                key={index}
-                initial={{ opacity: 0, y: 30 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6, delay: index * 0.1 }}
-                className="card hover:shadow-xl transition-all duration-300 group"
-              >
-                <service.icon className="w-12 h-12 text-primary-600 mb-4 group-hover:scale-110 transition-transform duration-200" />
-                <h3 className="text-2xl font-bold mb-2">{service.title}</h3>
-                <div className="flex justify-between items-center mb-4">
-                  <span className="text-gray-600">Amount:</span>
-                  <span className="font-semibold text-primary-600">{service.amount}</span>
-                </div>
-                <div className="flex justify-between items-center mb-6">
-                  <span className="text-gray-600">Interest Rate:</span>
-                  <span className="font-semibold text-secondary-600">{service.rate}</span>
-                </div>
-                <ul className="space-y-2 mb-6">
-                  {service.features.map((feature, idx) => (
-                    <li key={idx} className="flex items-center text-sm text-gray-600">
-                      <CheckCircle className="w-4 h-4 text-secondary-500 mr-2" />
-                      {feature}
-                    </li>
-                  ))}
-                </ul>
-                <button className="w-full btn-primary group-hover:bg-primary-700">
-                  Apply Now <ArrowRight className="w-4 h-4 ml-2 inline" />
-                </button>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Testimonials */}
-      <section className="py-20 bg-gray-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <motion.div
-            initial={{ opacity: 0, y: 50 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8 }}
-            className="text-center mb-16"
-          >
-            <h2 className="text-4xl font-bold text-gray-900 mb-4">What Our Customers Say</h2>
-            <div className="flex justify-center mb-4">
-              {[...Array(5)].map((_, i) => (
-                <Star key={i} className="w-6 h-6 text-yellow-400 fill-current" />
-              ))}
-            </div>
-            <p className="text-xl text-gray-600">4.9/5 rating from 10,000+ happy customers</p>
-          </motion.div>
-
-          <div className="grid md:grid-cols-3 gap-8">
-            {[
-              {
-                name: "Rajesh Kumar",
-                location: "Mumbai",
-                text: "Got my personal loan approved in just 18 hours! The process was incredibly smooth and the team was very supportive."
-              },
-              {
-                name: "Priya Sharma", 
-                location: "Delhi",
-                text: "Best interest rates in the market. The EMI calculator helped me plan my finances perfectly. Highly recommended!"
-              },
-              {
-                name: "Amit Patel",
-                location: "Bangalore", 
-                text: "Excellent customer service and transparent process. No hidden charges and quick disbursal. Thank you QuickLoan!"
-              }
-            ].map((testimonial, index) => (
-              <motion.div
-                key={index}
-                initial={{ opacity: 0, y: 30 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6, delay: index * 0.1 }}
-                className="card"
-              >
-                <div className="flex mb-4">
-                  {[...Array(5)].map((_, i) => (
-                    <Star key={i} className="w-4 h-4 text-yellow-400 fill-current" />
-                  ))}
-                </div>
-                <p className="text-gray-600 mb-4 italic">"{testimonial.text}"</p>
-                <div>
-                  <p className="font-semibold">{testimonial.name}</p>
-                  <p className="text-sm text-gray-500">{testimonial.location}</p>
-                </div>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Contact Section */}
-      <section id="contact" className="py-20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid lg:grid-cols-2 gap-12">
-            <motion.div
-              initial={{ opacity: 0, x: -50 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.8 }}
-            >
-              <h2 className="text-4xl font-bold text-gray-900 mb-6">Get in Touch</h2>
-              <p className="text-xl text-gray-600 mb-8">
-                Ready to get your loan? Contact our experts today for personalized assistance.
-              </p>
-              
-              <div className="space-y-6">
-                <div className="flex items-center">
-                  <Phone className="w-6 h-6 text-primary-600 mr-4" />
-                  <div>
-                    <p className="font-semibold">Call Us</p>
-                    <p className="text-gray-600">+91 98765 43210</p>
-                  </div>
-                </div>
-                <div className="flex items-center">
-                  <Mail className="w-6 h-6 text-primary-600 mr-4" />
-                  <div>
-                    <p className="font-semibold">Email Us</p>
-                    <p className="text-gray-600">support@quickloan.com</p>
-                  </div>
-                </div>
-                <div className="flex items-center">
-                  <MapPin className="w-6 h-6 text-primary-600 mr-4" />
-                  <div>
-                    <p className="font-semibold">Visit Us</p>
-                    <p className="text-gray-600">123 Business District, Mumbai, India</p>
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-
-            <motion.div
-              initial={{ opacity: 0, x: 50 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.8 }}
-              className="card"
-            >
-              <h3 className="text-2xl font-bold mb-6">Quick Loan Inquiry</h3>
-              <form className="space-y-4">
-                <div className="grid md:grid-cols-2 gap-4">
-                  <input
-                    type="text"
-                    placeholder="Full Name"
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                  />
-                  <input
-                    type="tel"
-                    placeholder="Phone Number"
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                  />
-                </div>
-                <input
-                  type="email"
-                  placeholder="Email Address"
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                />
-                <select className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent">
-                  <option>Select Loan Type</option>
-                  <option>Personal Loan</option>
-                  <option>Business Loan</option>
-                  <option>Home Loan</option>
-                </select>
-                <input
-                  type="number"
-                  placeholder="Loan Amount Required"
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                />
-                <textarea
-                  placeholder="Additional Requirements"
-                  rows={4}
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                ></textarea>
-                <button type="submit" className="w-full btn-primary">
-                  Submit Inquiry
-                </button>
-              </form>
-            </motion.div>
-          </div>
-        </div>
-      </section>
-
-      {/* Footer */}
-      <footer className="bg-gray-900 text-white py-12">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid md:grid-cols-4 gap-8">
-            <div>
-              <h3 className="text-2xl font-bold mb-4">QuickLoan</h3>
-              <p className="text-gray-400">
-                Your trusted partner for all financial needs. Fast, secure, and reliable loan services.
-              </p>
-            </div>
-            <div>
-              <h4 className="font-semibold mb-4">Services</h4>
-              <ul className="space-y-2 text-gray-400">
-                <li>Personal Loans</li>
-                <li>Business Loans</li>
-                <li>Home Loans</li>
-                <li>EMI Calculator</li>
-              </ul>
-            </div>
-            <div>
-              <h4 className="font-semibold mb-4">Company</h4>
-              <ul className="space-y-2 text-gray-400">
-                <li>About Us</li>
-                <li>Contact</li>
-                <li>Careers</li>
-                <li>Privacy Policy</li>
-              </ul>
-            </div>
-            <div>
-              <h4 className="font-semibold mb-4">Support</h4>
-              <ul className="space-y-2 text-gray-400">
-                <li>Help Center</li>
-                <li>FAQs</li>
-                <li>Terms of Service</li>
-                <li>Complaint Resolution</li>
-              </ul>
-            </div>
-          </div>
-          <div className="border-t border-gray-800 mt-8 pt-8 text-center text-gray-400">
-            <p>&copy; 2024 QuickLoan. All rights reserved. | Licensed by RBI</p>
-          </div>
-        </div>
-      </footer>
+      <Footer />
     </div>
   )
 }

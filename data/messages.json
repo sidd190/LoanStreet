@@ -1,0 +1,80 @@
+[
+  {
+    "id": "1",
+    "type": "WHATSAPP",
+    "direction": "OUTBOUND",
+    "content": "Hi Rajesh! Thank you for your interest in our personal loan. Our team will contact you shortly with the best rates.",
+    "status": "READ",
+    "contactName": "Rajesh Kumar",
+    "contactPhone": "+91-9876543210",
+    "contactEmail": "rajesh@example.com",
+    "campaignName": "Personal Loan Promotion",
+    "sentBy": "Priya Sharma",
+    "sentAt": "2024-10-26T10:30:00",
+    "deliveredAt": "2024-10-26T10:31:00",
+    "readAt": "2024-10-26T10:35:00",
+    "createdAt": "2024-10-26T10:30:00"
+  },
+  {
+    "id": "2",
+    "type": "WHATSAPP",
+    "direction": "INBOUND",
+    "content": "Yes, I am interested. What documents do I need to provide?",
+    "status": "REPLIED",
+    "contactName": "Rajesh Kumar",
+    "contactPhone": "+91-9876543210",
+    "contactEmail": "rajesh@example.com",
+    "createdAt": "2024-10-26T10:40:00"
+  },
+  {
+    "id": "3",
+    "type": "SMS",
+    "direction": "OUTBOUND",
+    "content": "Get instant business loans up to ₹1Cr. Competitive rates starting from 12.99%. Apply now: quickloan.com/apply",
+    "status": "DELIVERED",
+    "contactName": "Amit Patel",
+    "contactPhone": "+91-9876543211",
+    "campaignName": "Business Loan Campaign",
+    "sentBy": "System",
+    "sentAt": "2024-10-25T14:15:00",
+    "deliveredAt": "2024-10-25T14:16:00",
+    "createdAt": "2024-10-25T14:15:00"
+  },
+  {
+    "id": "4",
+    "type": "EMAIL",
+    "direction": "OUTBOUND",
+    "content": "Dear Priya, Thank you for your home loan inquiry. We have prepared a customized loan offer for you...",
+    "status": "SENT",
+    "contactName": "Priya Sharma",
+    "contactPhone": "+91-9876543212",
+    "contactEmail": "priya@example.com",
+    "campaignName": "Home Loan Special Offer",
+    "sentBy": "Admin User",
+    "sentAt": "2024-10-24T16:20:00",
+    "createdAt": "2024-10-24T16:20:00"
+  },
+  {
+    "id": "5",
+    "type": "SMS",
+    "direction": "INBOUND",
+    "content": "STOP",
+    "status": "REPLIED",
+    "contactName": "Vikram Singh",
+    "contactPhone": "+91-9876543213",
+    "createdAt": "2024-10-24T11:45:00"
+  },
+  {
+    "id": "6",
+    "type": "WHATSAPP",
+    "direction": "OUTBOUND",
+    "content": "Hello! We have a special festival offer on personal loans. Interest rates starting from 10.99%. Would you like to know more?",
+    "status": "FAILED",
+    "contactName": "Sneha Gupta",
+    "contactPhone": "+91-9876543214",
+    "campaignName": "Festival Loan Campaign",
+    "sentBy": "Marketing Team",
+    "sentAt": "2024-10-23T09:30:00",
+    "createdAt": "2024-10-23T09:30:00"
+  }
+]

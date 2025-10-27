@@ -17,6 +17,7 @@ import {
   ArrowDownRight
 } from 'lucide-react'
 import AdminLayout from '../components/AdminLayout'
+import DataService from '../../../lib/dataService'
 
 export default function AdminDashboard() {
   const [stats, setStats] = useState({
@@ -43,13 +44,12 @@ export default function AdminDashboard() {
 
   const fetchDashboardStats = async () => {
     try {
-      const response = await fetch('/api/dashboard/stats')
-      if (response.ok) {
-        const data = await response.json()
-        setStats(data)
-      }
+      console.log('🔄 Fetching dashboard stats...')
+      const data = await DataService.getDashboardStats()
+      setStats(data)
+      console.log('✅ Dashboard stats loaded successfully')
     } catch (error) {
-      console.error('Failed to fetch dashboard stats:', error)
+      console.error('❌ Failed to fetch dashboard stats:', error)
     }
   }
 
