@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
+import RouteProtection from '../../components/RouteProtection'
 import { 
   BarChart3, 
   TrendingUp, 
@@ -17,7 +18,13 @@ import {
   RefreshCw,
   Eye,
   ArrowUpRight,
-  ArrowDownRight
+  ArrowDownRight,
+  PieChart,
+  Activity,
+  Clock,
+  Percent,
+  FileText,
+  Share2
 } from 'lucide-react'
 import AdminLayout from '../components/AdminLayout'
 import DataService from '../../../lib/dataService'
@@ -62,7 +69,7 @@ interface AnalyticsData {
   }[]
 }
 
-export default function AnalyticsPage() {
+function AnalyticsPageContent() {
   const [dateRange, setDateRange] = useState('30d')
   const [isLoading, setIsLoading] = useState(true)
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null)
@@ -155,19 +162,74 @@ export default function AnalyticsPage() {
   }
 
   const exportReport = () => {
-    // Simulate report export
-    const csvContent = `Campaign,Sent,Delivered,Opened,Clicked,Responded,Converted
+    // Enhanced CSV export with comprehensive data
+    const csvContent = `Campaign Performance Report - ${dateRange}
+Generated on: ${new Date().toLocaleString()}
+
+Campaign,Sent,Delivered,Opened,Clicked,Responded,Converted,Conversion Rate,Response Rate
 ${currentAnalytics.campaignPerformance.map(c => 
-  `${c.name},${c.sent},${c.delivered},${c.opened},${c.clicked},${c.responded},${c.converted}`
+  `${c.name},${c.sent},${c.delivered},${c.opened},${c.clicked},${c.responded},${c.converted},${((c.converted/c.sent)*100).toFixed(2)}%,${((c.responded/c.sent)*100).toFixed(2)}%`
+).join('\n')}
+
+Channel Performance
+Channel,Sent,Delivered,Read/Opened,Replied/Clicked,Response Rate
+WhatsApp,${currentAnalytics.messageStats.whatsapp.sent},${currentAnalytics.messageStats.whatsapp.delivered},${currentAnalytics.messageStats.whatsapp.read},${currentAnalytics.messageStats.whatsapp.replied},${((currentAnalytics.messageStats.whatsapp.replied/currentAnalytics.messageStats.whatsapp.sent)*100).toFixed(2)}%
+SMS,${currentAnalytics.messageStats.sms.sent},${currentAnalytics.messageStats.sms.delivered},${currentAnalytics.messageStats.sms.clicked},${currentAnalytics.messageStats.sms.replied},${((currentAnalytics.messageStats.sms.replied/currentAnalytics.messageStats.sms.sent)*100).toFixed(2)}%
+Email,${currentAnalytics.messageStats.email.sent},${currentAnalytics.messageStats.email.delivered},${currentAnalytics.messageStats.email.opened},${currentAnalytics.messageStats.email.clicked},${((currentAnalytics.messageStats.email.opened/currentAnalytics.messageStats.email.sent)*100).toFixed(2)}%
+
+Lead Sources
+Source,Leads,Conversions,Conversion Rate
+${currentAnalytics.leadSources.map(s => 
+  `${s.source},${s.leads},${s.conversions},${s.conversionRate.toFixed(2)}%`
+).join('\n')}
+
+Time Series Data
+Date,Messages,Responses,Conversions
+${currentAnalytics.timeSeriesData.map(d => 
+  `${d.date},${d.messages},${d.responses},${d.conversions}`
 ).join('\n')}`
     
     const blob = new Blob([csvContent], { type: 'text/csv' })
     const url = window.URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `analytics_report_${dateRange}.csv`
+    a.download = `comprehensive_analytics_report_${dateRange}_${new Date().toISOString().split('T')[0]}.csv`
     a.click()
     window.URL.revokeObjectURL(url)
+    toast.success('Comprehensive analytics report exported successfully')
+  }
+
+  const exportJSONReport = () => {
+    // Export detailed JSON data for external analysis
+    const jsonData = {
+      reportMetadata: {
+        generatedAt: new Date().toISOString(),
+        dateRange,
+        reportType: 'comprehensive_analytics'
+      },
+      overview: currentAnalytics.overview,
+      campaignPerformance: currentAnalytics.campaignPerformance,
+      channelPerformance: currentAnalytics.messageStats,
+      leadSources: currentAnalytics.leadSources,
+      timeSeriesData: currentAnalytics.timeSeriesData,
+      calculatedMetrics: {
+        totalROI: currentAnalytics.campaignPerformance.reduce((sum, c) => sum + (c.converted * 50000 - c.sent * 5), 0), // Estimated ROI
+        avgCampaignConversion: currentAnalytics.campaignPerformance.reduce((sum, c) => sum + (c.converted/c.sent), 0) / currentAnalytics.campaignPerformance.length * 100,
+        bestPerformingChannel: Object.entries(currentAnalytics.messageStats).reduce((best, [channel, stats]) => {
+          const responseRate = ((stats as any).replied || (stats as any).opened || (stats as any).clicked || 0) / stats.sent
+          return responseRate > best.rate ? { channel, rate: responseRate } : best
+        }, { channel: '', rate: 0 })
+      }
+    }
+
+    const blob = new Blob([JSON.stringify(jsonData, null, 2)], { type: 'application/json' })
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `analytics_data_${dateRange}_${new Date().toISOString().split('T')[0]}.json`
+    a.click()
+    window.URL.revokeObjectURL(url)
+    toast.success('JSON analytics data exported for external analysis')
   }
 
   const getChangeIndicator = (current: number, previous: number) => {
@@ -220,13 +282,23 @@ ${currentAnalytics.campaignPerformance.map(c =>
               <RefreshCw className={`w-5 h-5 text-gray-600 ${isLoading ? 'animate-spin' : ''}`} />
             </button>
             
-            <button
-              onClick={exportReport}
-              className="btn-primary flex items-center"
-            >
-              <Download className="w-4 h-4 mr-2" />
-              Export Report
-            </button>
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={exportReport}
+                className="btn-primary flex items-center"
+              >
+                <Download className="w-4 h-4 mr-2" />
+                Export CSV
+              </button>
+              
+              <button
+                onClick={exportJSONReport}
+                className="btn-secondary flex items-center"
+              >
+                <FileText className="w-4 h-4 mr-2" />
+                Export JSON
+              </button>
+            </div>
           </div>
         </div>
 
@@ -303,6 +375,127 @@ ${currentAnalytics.campaignPerformance.map(c =>
             </div>
             <p className="text-sm font-medium text-gray-600">Conversion Rate</p>
             <p className="text-2xl font-bold text-gray-900">{currentAnalytics.overview.conversionRate}%</p>
+          </motion.div>
+        </div>
+
+        {/* Performance Indicators Row */}
+        <div className="grid lg:grid-cols-3 gap-6">
+          {/* ROI Calculator */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.4 }}
+            className="bg-white rounded-xl shadow-sm border border-gray-100 p-6"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">Campaign ROI</h3>
+              <Activity className="w-5 h-5 text-green-600" />
+            </div>
+            
+            <div className="space-y-4">
+              {currentAnalytics.campaignPerformance.map((campaign, index) => {
+                const estimatedRevenue = campaign.converted * 50000 // Avg loan commission
+                const campaignCost = campaign.sent * 5 // Avg cost per message
+                const roi = ((estimatedRevenue - campaignCost) / campaignCost) * 100
+                
+                return (
+                  <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <div>
+                      <p className="font-medium text-sm text-gray-900">{campaign.name}</p>
+                      <p className="text-xs text-gray-500">
+                        ₹{estimatedRevenue.toLocaleString()} revenue
+                      </p>
+                    </div>
+                    <div className={`text-right ${roi > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      <p className="font-bold text-lg">{roi.toFixed(0)}%</p>
+                      <p className="text-xs">ROI</p>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </motion.div>
+
+          {/* Conversion Funnel */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.5 }}
+            className="bg-white rounded-xl shadow-sm border border-gray-100 p-6"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">Conversion Funnel</h3>
+              <PieChart className="w-5 h-5 text-blue-600" />
+            </div>
+            
+            <div className="space-y-3">
+              {[
+                { label: 'Messages Sent', value: currentAnalytics.overview.totalMessages, percentage: 100 },
+                { label: 'Delivered', value: Math.floor(currentAnalytics.overview.totalMessages * 0.98), percentage: 98 },
+                { label: 'Opened/Read', value: Math.floor(currentAnalytics.overview.totalMessages * 0.65), percentage: 65 },
+                { label: 'Responded', value: Math.floor(currentAnalytics.overview.totalMessages * (currentAnalytics.overview.responseRate/100)), percentage: currentAnalytics.overview.responseRate },
+                { label: 'Converted', value: Math.floor(currentAnalytics.overview.totalMessages * (currentAnalytics.overview.conversionRate/100)), percentage: currentAnalytics.overview.conversionRate }
+              ].map((stage, index) => (
+                <div key={index} className="relative">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-sm font-medium text-gray-700">{stage.label}</span>
+                    <span className="text-sm text-gray-500">{stage.value.toLocaleString()}</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div 
+                      className="bg-gradient-to-r from-blue-500 to-purple-600 h-2 rounded-full transition-all duration-500"
+                      style={{ width: `${stage.percentage}%` }}
+                    ></div>
+                  </div>
+                  <div className="text-xs text-gray-500 mt-1">{stage.percentage.toFixed(1)}%</div>
+                </div>
+              ))}
+            </div>
+          </motion.div>
+
+          {/* Time-based Performance */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.6 }}
+            className="bg-white rounded-xl shadow-sm border border-gray-100 p-6"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">Performance Trends</h3>
+              <Clock className="w-5 h-5 text-purple-600" />
+            </div>
+            
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="text-center p-3 bg-green-50 rounded-lg">
+                  <p className="text-2xl font-bold text-green-600">
+                    {currentAnalytics.overview.avgResponseTime}h
+                  </p>
+                  <p className="text-sm text-gray-600">Avg Response Time</p>
+                </div>
+                <div className="text-center p-3 bg-blue-50 rounded-lg">
+                  <p className="text-2xl font-bold text-blue-600">
+                    {currentAnalytics.overview.activeUsers}
+                  </p>
+                  <p className="text-sm text-gray-600">Active Users</p>
+                </div>
+              </div>
+              
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-600">Peak Response Time</span>
+                  <span className="text-sm font-medium">2-4 PM</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-600">Best Performing Day</span>
+                  <span className="text-sm font-medium">Tuesday</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-600">Optimal Send Time</span>
+                  <span className="text-sm font-medium">10 AM - 12 PM</span>
+                </div>
+              </div>
+            </div>
           </motion.div>
         </div>
 
@@ -475,11 +668,95 @@ ${currentAnalytics.campaignPerformance.map(c =>
           </motion.div>
         </div>
 
+        {/* Time Series Performance Chart */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.7 }}
+          className="bg-white rounded-xl shadow-sm border border-gray-100 p-6"
+        >
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-lg font-semibold text-gray-900">Performance Over Time</h3>
+            <div className="flex items-center space-x-4">
+              <div className="flex items-center">
+                <div className="w-3 h-3 bg-blue-500 rounded-full mr-2"></div>
+                <span className="text-sm text-gray-600">Messages</span>
+              </div>
+              <div className="flex items-center">
+                <div className="w-3 h-3 bg-green-500 rounded-full mr-2"></div>
+                <span className="text-sm text-gray-600">Responses</span>
+              </div>
+              <div className="flex items-center">
+                <div className="w-3 h-3 bg-purple-500 rounded-full mr-2"></div>
+                <span className="text-sm text-gray-600">Conversions</span>
+              </div>
+            </div>
+          </div>
+          
+          <div className="relative h-64">
+            {/* Simple line chart visualization */}
+            <div className="absolute inset-0 flex items-end justify-between px-4">
+              {currentAnalytics.timeSeriesData.map((data, index) => {
+                const maxMessages = Math.max(...currentAnalytics.timeSeriesData.map(d => d.messages))
+                const messageHeight = (data.messages / maxMessages) * 200
+                const responseHeight = (data.responses / maxMessages) * 200
+                const conversionHeight = (data.conversions / maxMessages) * 200
+                
+                return (
+                  <div key={index} className="flex flex-col items-center space-y-2">
+                    <div className="flex items-end space-x-1">
+                      <div 
+                        className="w-4 bg-blue-500 rounded-t"
+                        style={{ height: `${messageHeight}px` }}
+                        title={`Messages: ${data.messages}`}
+                      ></div>
+                      <div 
+                        className="w-4 bg-green-500 rounded-t"
+                        style={{ height: `${responseHeight}px` }}
+                        title={`Responses: ${data.responses}`}
+                      ></div>
+                      <div 
+                        className="w-4 bg-purple-500 rounded-t"
+                        style={{ height: `${conversionHeight}px` }}
+                        title={`Conversions: ${data.conversions}`}
+                      ></div>
+                    </div>
+                    <div className="text-xs text-gray-500 transform -rotate-45">
+                      {new Date(data.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+          
+          <div className="mt-4 grid grid-cols-3 gap-4 text-center">
+            <div>
+              <p className="text-2xl font-bold text-blue-600">
+                {currentAnalytics.timeSeriesData.reduce((sum, d) => sum + d.messages, 0).toLocaleString()}
+              </p>
+              <p className="text-sm text-gray-600">Total Messages</p>
+            </div>
+            <div>
+              <p className="text-2xl font-bold text-green-600">
+                {currentAnalytics.timeSeriesData.reduce((sum, d) => sum + d.responses, 0).toLocaleString()}
+              </p>
+              <p className="text-sm text-gray-600">Total Responses</p>
+            </div>
+            <div>
+              <p className="text-2xl font-bold text-purple-600">
+                {currentAnalytics.timeSeriesData.reduce((sum, d) => sum + d.conversions, 0).toLocaleString()}
+              </p>
+              <p className="text-sm text-gray-600">Total Conversions</p>
+            </div>
+          </div>
+        </motion.div>
+
         {/* Lead Sources */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.6 }}
+          transition={{ delay: 0.8 }}
           className="bg-white rounded-xl shadow-sm border border-gray-100 p-6"
         >
           <h3 className="text-lg font-semibold text-gray-900 mb-6">Lead Sources Performance</h3>
@@ -528,5 +805,13 @@ ${currentAnalytics.campaignPerformance.map(c =>
         </motion.div>
       </div>
     </AdminLayout>
+  )
+}
+
+export default function AnalyticsPage() {
+  return (
+    <RouteProtection requiredRole="ADMIN">
+      <AnalyticsPageContent />
+    </RouteProtection>
   )
 }

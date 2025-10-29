@@ -8,15 +8,31 @@ export async function GET(request: NextRequest) {
     // Try to get leads from database
     const leads = await prisma.lead.findMany({
       include: {
-        contact: true,
-        assignedTo: true
+        contact: {
+          select: {
+            id: true,
+            name: true,
+            phone: true,
+            email: true
+          }
+        },
+        assignedTo: {
+          select: {
+            id: true,
+            name: true,
+            email: true
+          }
+        }
       },
       orderBy: {
         createdAt: 'desc'
       }
     })
 
-    return NextResponse.json(leads)
+    return NextResponse.json({
+      success: true,
+      leads
+    })
   } catch (error) {
     console.error('Database error in /api/leads:', error)
     // Return error so DataService falls back to JSON data

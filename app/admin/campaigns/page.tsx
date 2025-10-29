@@ -1,7 +1,9 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
+import RouteProtection from '../../components/RouteProtection'
 import { 
   Target, 
   Search, 
@@ -9,7 +11,7 @@ import {
   Plus,
   Play,
   Pause,
-  Stop,
+  Square,
   Edit,
   Trash2,
   Eye,
@@ -30,7 +32,8 @@ import AdminLayout from '../components/AdminLayout'
 import toast from 'react-hot-toast'
 import DataService, { Campaign } from '../../../lib/dataService'
 
-export default function CampaignsPage() {
+function CampaignsPageContent() {
+  const router = useRouter()
   const [campaigns, setCampaigns] = useState<Campaign[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -38,7 +41,6 @@ export default function CampaignsPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState('ALL')
   const [typeFilter, setTypeFilter] = useState('ALL')
-  const [showCreateModal, setShowCreateModal] = useState(false)
 
   useEffect(() => {
     loadCampaigns()
@@ -180,7 +182,7 @@ export default function CampaignsPage() {
             </p>
           </div>
           <button
-            onClick={() => setShowCreateModal(true)}
+            onClick={() => router.push('/admin/campaigns/create')}
             className="btn-primary flex items-center"
           >
             <Plus className="w-5 h-5 mr-2" />
@@ -405,10 +407,18 @@ export default function CampaignsPage() {
                         <Play className="w-4 h-4" />
                       </button>
                     )}
-                    <button className="p-2 text-gray-600 hover:bg-gray-50 rounded-lg">
+                    <button 
+                      onClick={() => router.push(`/admin/campaigns/${campaign.id}`)}
+                      className="p-2 text-gray-600 hover:bg-gray-50 rounded-lg"
+                      title="View Campaign"
+                    >
                       <Eye className="w-4 h-4" />
                     </button>
-                    <button className="p-2 text-gray-600 hover:bg-gray-50 rounded-lg">
+                    <button 
+                      onClick={() => router.push(`/admin/campaigns/${campaign.id}/edit`)}
+                      className="p-2 text-gray-600 hover:bg-gray-50 rounded-lg"
+                      title="Edit Campaign"
+                    >
                       <Edit className="w-4 h-4" />
                     </button>
                     <button
@@ -497,5 +507,13 @@ export default function CampaignsPage() {
         )}
       </div>
     </AdminLayout>
+  )
+}
+
+export default function CampaignsPage() {
+  return (
+    <RouteProtection requiredRole="ADMIN">
+      <CampaignsPageContent />
+    </RouteProtection>
   )
 }

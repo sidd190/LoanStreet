@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
+import RouteProtection from '../../components/RouteProtection'
 import { 
   Users, 
   Search, 
@@ -26,7 +27,7 @@ import AdminLayout from '../components/AdminLayout'
 import toast from 'react-hot-toast'
 import DataService, { Contact } from '../../../lib/dataService'
 
-export default function ContactsPage() {
+function ContactsPageContent() {
   const [contacts, setContacts] = useState<Contact[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -193,7 +194,7 @@ export default function ContactsPage() {
     avgResponseRate: Math.round(contacts.reduce((sum, c) => sum + c.responseRate, 0) / contacts.length)
   }
 
-  const sources = [...new Set(contacts.map(c => c.source))]
+  const sources = Array.from(new Set(contacts.map(c => c.source)))
 
   return (
     <AdminLayout>
@@ -544,5 +545,13 @@ export default function ContactsPage() {
         </motion.div>
       </div>
     </AdminLayout>
+  )
+}
+
+export default function ContactsPage() {
+  return (
+    <RouteProtection requiredRole="ADMIN">
+      <ContactsPageContent />
+    </RouteProtection>
   )
 }

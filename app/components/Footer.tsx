@@ -1,5 +1,6 @@
 'use client'
 
+import React from 'react'
 import { motion } from 'framer-motion'
 import Link from 'next/link'
 import { 
@@ -69,7 +70,7 @@ export default function Footer() {
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
           >
-            <h3 className="text-2xl font-bold mb-4 bg-gradient-to-r from-primary-400 to-primary-600 bg-clip-text text-transparent">
+            <h3 className="text-2xl font-bold mb-4 bg-gradient-to-r from-primary-400 to-primary-600 bg-clip-text text-transparent gradient-animate">
               QuickLoan
             </h3>
             <p className="text-gray-400 mb-6">
@@ -77,30 +78,50 @@ export default function Footer() {
             </p>
             <div className="flex space-x-4">
               <motion.a
-                whileHover={{ scale: 1.1 }}
+                whileHover={{ 
+                  scale: 1.2, 
+                  rotate: 360,
+                  boxShadow: "0 0 20px rgba(37, 99, 235, 0.5)"
+                }}
+                transition={{ duration: 0.3 }}
                 href="#"
-                className="w-10 h-10 bg-primary-600 rounded-full flex items-center justify-center hover:bg-primary-700 transition-colors"
+                className="w-10 h-10 bg-primary-600 rounded-full flex items-center justify-center hover:bg-primary-700 transition-colors transform-gpu"
               >
                 <Facebook className="w-5 h-5" />
               </motion.a>
               <motion.a
-                whileHover={{ scale: 1.1 }}
+                whileHover={{ 
+                  scale: 1.2, 
+                  rotate: 360,
+                  boxShadow: "0 0 20px rgba(37, 99, 235, 0.5)"
+                }}
+                transition={{ duration: 0.3 }}
                 href="#"
-                className="w-10 h-10 bg-primary-600 rounded-full flex items-center justify-center hover:bg-primary-700 transition-colors"
+                className="w-10 h-10 bg-primary-600 rounded-full flex items-center justify-center hover:bg-primary-700 transition-colors transform-gpu"
               >
                 <Twitter className="w-5 h-5" />
               </motion.a>
               <motion.a
-                whileHover={{ scale: 1.1 }}
+                whileHover={{ 
+                  scale: 1.2, 
+                  rotate: 360,
+                  boxShadow: "0 0 20px rgba(37, 99, 235, 0.5)"
+                }}
+                transition={{ duration: 0.3 }}
                 href="#"
-                className="w-10 h-10 bg-primary-600 rounded-full flex items-center justify-center hover:bg-primary-700 transition-colors"
+                className="w-10 h-10 bg-primary-600 rounded-full flex items-center justify-center hover:bg-primary-700 transition-colors transform-gpu"
               >
                 <Instagram className="w-5 h-5" />
               </motion.a>
               <motion.a
-                whileHover={{ scale: 1.1 }}
+                whileHover={{ 
+                  scale: 1.2, 
+                  rotate: 360,
+                  boxShadow: "0 0 20px rgba(37, 99, 235, 0.5)"
+                }}
+                transition={{ duration: 0.3 }}
                 href="#"
-                className="w-10 h-10 bg-primary-600 rounded-full flex items-center justify-center hover:bg-primary-700 transition-colors"
+                className="w-10 h-10 bg-primary-600 rounded-full flex items-center justify-center hover:bg-primary-700 transition-colors transform-gpu"
               >
                 <Linkedin className="w-5 h-5" />
               </motion.a>

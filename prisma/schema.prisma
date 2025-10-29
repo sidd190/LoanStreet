@@ -8,14 +8,17 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  password  String
-  name      String
-  role      String   @default("EMPLOYEE") // ADMIN, EMPLOYEE
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id               String    @id @default(cuid())
+  email            String    @unique
+  password         String
+  name             String
+  role             String    @default("EMPLOYEE") // ADMIN, EMPLOYEE
+  isActive         Boolean   @default(true)
+  lastLogin        DateTime?
+  resetToken       String?
+  resetTokenExpiry DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
   // Relations
   sentCampaigns     Campaign[]
@@ -46,12 +49,17 @@ model Campaign {
   name        String
   type        String   // SMS, WHATSAPP
   message     String
+  templateName String? // SMSFresh template reference
+  parameters  String?  // JSON string of template parameters
+  mediaUrl    String?  // For image/video/document campaigns
+  mediaType   String?  // image, video, document
   status      String   @default("DRAFT") // DRAFT, SCHEDULED, RUNNING, COMPLETED, PAUSED, CANCELLED
   scheduledAt DateTime?
   sentAt      DateTime?
   totalSent   Int      @default(0)
   totalDelivered Int   @default(0)
   totalReplies   Int   @default(0)
+  totalFailed    Int   @default(0)
   createdById String
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -89,9 +97,15 @@ model Message {
   contactId  String
   campaignId String?
   sentById   String?
+  smsFreshId String?  // External API message ID
+  templateName String? // SMSFresh template reference
+  parameters String?  // JSON string of template parameters
+  mediaUrl   String?  // For image/video/document messages
+  mediaType  String?  // image, video, document
   sentAt     DateTime?
   deliveredAt DateTime?
   readAt     DateTime?
+  repliedAt  DateTime?
   createdAt  DateTime @default(now())
 
   // Relations
@@ -160,4 +174,37 @@ model CronJob {
   config      String?  // JSON configuration
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+model Automation {
+  id              String   @id @default(cuid())
+  name            String
+  description     String?
+  type            String   // campaign, followup, data_processing, lead_scoring
+  isActive        Boolean  @default(true)
+  schedule        String   // JSON string of schedule configuration
+  conditions      String   // JSON string of automation conditions
+  actions         String   // JSON string of automation actions
+  totalRuns       Int      @default(0)
+  successfulRuns  Int      @default(0)
+  lastRun         DateTime?
+  nextRun         DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model EmployeeActionLog {
+  id           String   @id @default(cuid())
+  employeeId   String
+  employeeName String
+  action       String   // login, logout, view_messages, send_reply, mark_read, navigation, search, etc.
+  details      String?  // JSON string of additional details
+  timestamp    DateTime @default(now())
+  ipAddress    String?
+  userAgent    String?
+  createdAt    DateTime @default(now())
+
+  @@index([employeeId])
+  @@index([timestamp])
+  @@index([action])
 }

@@ -57,6 +57,20 @@ class CronJobManager {
         schedule: '*/10 * * * *', // Every 10 minutes
         handler: this.updateCampaignStatus,
         isActive: true
+      },
+      {
+        id: 'data-processing-automation',
+        name: 'Data Processing Automation',
+        schedule: '0 */6 * * *', // Every 6 hours
+        handler: this.processDataAutomation,
+        isActive: true
+      },
+      {
+        id: 'campaign-performance-reports',
+        name: 'Generate Campaign Performance Reports',
+        schedule: '0 8 * * *', // Daily at 8 AM
+        handler: this.generateDailyReports,
+        isActive: true
       }
     ]
 
@@ -301,9 +315,23 @@ class CronJobManager {
         })
         
         console.log(`Started campaign: ${campaign.name}`)
+        
+        // Trigger automated execution for scheduled campaigns
+        try {
+          const { executeAutomatedCampaign } = await import('./campaignExecutor')
+          await executeAutomatedCampaign(campaign.id, campaign.createdById, {
+            markProcessedContacts: true,
+            autoProgressToNextDataSet: true,
+            generatePerformanceReport: true,
+            triggerFollowUpCampaigns: false,
+            leadScoringUpdate: true
+          })
+        } catch (executionError) {
+          console.error(`Failed to execute automated campaign ${campaign.id}:`, executionError)
+        }
       }
 
-      // Check for completed campaigns
+      // Check for completed campaigns and trigger post-processing
       const runningCampaigns = await prisma.campaign.findMany({
         where: { status: 'RUNNING' },
         include: {
@@ -324,6 +352,22 @@ class CronJobManager {
           })
           
           console.log(`Completed campaign: ${campaign.name}`)
+          
+          // Trigger post-campaign automation
+          try {
+            const { getCampaignExecutor } = await import('./campaignExecutor')
+            const executor = getCampaignExecutor()
+            
+            // Generate performance report
+            await executor['generateCampaignReport'](campaign.id)
+            
+            // Mark processed contacts
+            await executor['markProcessedContacts'](campaign.id)
+            
+            console.log(`Post-campaign automation completed for: ${campaign.name}`)
+          } catch (automationError) {
+            console.error(`Failed to run post-campaign automation for ${campaign.id}:`, automationError)
+          }
         }
       }
     } catch (error) {
@@ -361,6 +405,158 @@ class CronJobManager {
       console.log(`Cleaned up ${deletedMessages.count} old messages and ${deletedActivities.count} old activities`)
     } catch (error) {
       console.error('Error cleaning up old data:', error)
+    }
+  }
+
+  private async processDataAutomation() {
+    console.log('Running data processing automation...')
+    
+    try {
+      // Find contacts that need processing status reset (older than 30 days)
+      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+      
+      const staleContacts = await prisma.contact.findMany({
+        where: {
+          lastContact: {
+            lt: thirtyDaysAgo
+          },
+          isActive: true
+        }
+      })
+
+      if (staleContacts.length > 0) {
+        // Reset processing status for stale contacts
+        await prisma.contact.updateMany({
+          where: {
+            id: { in: staleContacts.map(c => c.id) }
+          },
+          data: {
+            lastContact: null,
+            updatedAt: new Date()
+          }
+        })
+
+        console.log(`Reset processing status for ${staleContacts.length} stale contacts`)
+      }
+
+      // Clean up failed data imports older than 7 days
+      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+      
+      const cleanedImports = await prisma.dataImport.deleteMany({
+        where: {
+          status: 'FAILED',
+          createdAt: {
+            lt: sevenDaysAgo
+          }
+        }
+      })
+
+      console.log(`Cleaned up ${cleanedImports.count} failed data imports`)
+
+      // Update contact response rates based on recent activity
+      await this.updateContactResponseRates()
+
+    } catch (error) {
+      console.error('Error in data processing automation:', error)
+    }
+  }
+
+  private async updateContactResponseRates() {
+    try {
+      const contacts = await prisma.contact.findMany({
+        include: {
+          messages: {
+            where: {
+              createdAt: {
+                gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) // Last 30 days
+              }
+            }
+          }
+        }
+      })
+
+      for (const contact of contacts) {
+        const outboundMessages = contact.messages.filter(m => m.direction === 'OUTBOUND').length
+        const inboundMessages = contact.messages.filter(m => m.direction === 'INBOUND').length
+        
+        const responseRate = outboundMessages > 0 ? (inboundMessages / outboundMessages) : 0
+
+        // Update contact with calculated response rate (you might need to add this field to the schema)
+        // For now, we'll store it in tags as a workaround
+        const existingTags = contact.tags ? JSON.parse(contact.tags) : []
+        const updatedTags = existingTags.filter((tag: string) => !tag.startsWith('response_rate:'))
+        updatedTags.push(`response_rate:${Math.round(responseRate * 100)}`)
+
+        await prisma.contact.update({
+          where: { id: contact.id },
+          data: {
+            tags: JSON.stringify(updatedTags),
+            updatedAt: new Date()
+          }
+        })
+      }
+
+      console.log(`Updated response rates for ${contacts.length} contacts`)
+    } catch (error) {
+      console.error('Error updating contact response rates:', error)
+    }
+  }
+
+  private async generateDailyReports() {
+    console.log('Generating daily performance reports...')
+    
+    try {
+      // Find campaigns completed in the last 24 hours
+      const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000)
+      
+      const recentCampaigns = await prisma.campaign.findMany({
+        where: {
+          status: 'COMPLETED',
+          updatedAt: {
+            gte: yesterday
+          }
+        },
+        include: {
+          contacts: true,
+          createdBy: true
+        }
+      })
+
+      for (const campaign of recentCampaigns) {
+        try {
+          const { getCampaignExecutor } = await import('./campaignExecutor')
+          const executor = getCampaignExecutor()
+          
+          // Generate performance report
+          await executor['generateCampaignReport'](campaign.id)
+          
+          console.log(`Generated daily report for campaign: ${campaign.name}`)
+        } catch (reportError) {
+          console.error(`Failed to generate report for campaign ${campaign.id}:`, reportError)
+        }
+      }
+
+      // Generate system-wide daily summary
+      const totalCampaigns = recentCampaigns.length
+      const totalMessagesSent = recentCampaigns.reduce((sum, c) => sum + c.totalSent, 0)
+      const totalResponses = recentCampaigns.reduce((sum, c) => sum + c.totalReplies, 0)
+      
+      console.log(`Daily Summary: ${totalCampaigns} campaigns completed, ${totalMessagesSent} messages sent, ${totalResponses} responses received`)
+
+      // Create system activity record
+      if (totalCampaigns > 0) {
+        await prisma.activity.create({
+          data: {
+            type: 'NOTE',
+            title: 'Daily Campaign Summary',
+            description: `${totalCampaigns} campaigns completed with ${totalMessagesSent} messages sent and ${totalResponses} responses received.`,
+            userId: 'system'
+          }
+        })
+      }
+
+    } catch (error) {
+      console.error('Error generating daily reports:', error)
     }
   }
 

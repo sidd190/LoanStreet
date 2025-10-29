@@ -1,5 +1,6 @@
 'use client'
 
+import React from 'react'
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { useSearchParams } from 'next/navigation'
@@ -41,6 +42,7 @@ const steps = [
 export default function ApplyPage() {
   const searchParams = useSearchParams()
   const [currentStep, setCurrentStep] = useState(1)
+  const [validationErrors, setValidationErrors] = useState<string[]>([])
   const [formData, setFormData] = useState({
     // Personal Details
     firstName: '',
@@ -78,7 +80,46 @@ export default function ApplyPage() {
     setFormData(prev => ({ ...prev, [field]: value }))
   }
 
+  const validateCurrentStep = () => {
+    const errors: string[] = []
+    
+    switch (currentStep) {
+      case 1:
+        if (!formData.firstName) errors.push('First Name is required')
+        if (!formData.lastName) errors.push('Last Name is required')
+        if (!formData.email) errors.push('Email is required')
+        if (!formData.phone) errors.push('Phone Number is required')
+        if (!formData.dateOfBirth) errors.push('Date of Birth is required')
+        if (!formData.gender) errors.push('Gender is required')
+        if (!formData.address) errors.push('Address is required')
+        if (!formData.city) errors.push('City is required')
+        if (!formData.state) errors.push('State is required')
+        break
+      case 2:
+        if (!formData.loanType) errors.push('Loan Type is required')
+        if (!formData.loanAmount) errors.push('Loan Amount is required')
+        if (!formData.tenure) errors.push('Tenure is required')
+        if (!formData.purpose) errors.push('Purpose of Loan is required')
+        break
+      case 3:
+        if (!formData.employmentType) errors.push('Employment Type is required')
+        if (!formData.companyName) errors.push('Company Name is required')
+        if (!formData.monthlyIncome) errors.push('Monthly Income is required')
+        if (!formData.workExperience) errors.push('Work Experience is required')
+        break
+      case 4:
+        // Document upload is optional for now
+        break
+    }
+    
+    setValidationErrors(errors)
+    return errors.length === 0
+  }
+
   const nextStep = () => {
+    if (!validateCurrentStep()) {
+      return
+    }
     if (currentStep < 5) setCurrentStep(currentStep + 1)
   }
 
@@ -474,6 +515,21 @@ export default function ApplyPage() {
                 </div>
               )}
 
+              {/* Validation Errors */}
+              {validationErrors.length > 0 && (
+                <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6">
+                  <h4 className="text-red-800 font-medium mb-2">Please fix the following errors:</h4>
+                  <ul className="text-red-700 text-sm space-y-1">
+                    {validationErrors.map((error, index) => (
+                      <li key={index} className="flex items-center">
+                        <span className="w-1 h-1 bg-red-500 rounded-full mr-2"></span>
+                        {error}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
               {/* Navigation Buttons */}
               <div className="flex justify-between mt-8">
                 <button
@@ -489,7 +545,7 @@ export default function ApplyPage() {
                   <button
                     type="button"
                     onClick={nextStep}
-                    className="btn-primary"
+                    className="btn-primary flex items-center"
                   >
                     Next Step <ArrowRight className="w-4 h-4 ml-2" />
                   </button>

@@ -1,88 +1,95 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { PrismaClient } from '@prisma/client'
+import { NextRequest, NextResponse } from 'next/server';
+import { createMessageProcessor } from '@/lib/messageProcessor';
+import { withAuthAndRole } from '@/lib/middleware/auth';
+import { logger } from '@/lib/logger';
+import DataService from '@/lib/dataService';
 
-const prisma = new PrismaClient()
-
+/**
+ * Get messages with filtering and pagination
+ * GET /api/messages - Both admin and employee can access
+ */
 export async function GET(request: NextRequest) {
-  try {
-    // Try to get messages from database
-    const messages = await prisma.message.findMany({
-      include: {
-        contact: true,
-        campaign: true,
-        sentBy: true
-      },
-      orderBy: {
-        createdAt: 'desc'
-      },
-      take: 100 // Limit to recent messages
-    })
+  return withAuthAndRole(['ADMIN', 'EMPLOYEE'])(request, async (req) => {
+    try {
+      const { searchParams } = new URL(req.url);
+      
+      // Parse query parameters
+      const contactId = searchParams.get('contactId') || undefined;
+      const campaignId = searchParams.get('campaignId') || undefined;
+      const type = searchParams.get('type') as 'SMS' | 'WHATSAPP' | undefined;
+      const direction = searchParams.get('direction') as 'INBOUND' | 'OUTBOUND' | undefined;
+      const status = searchParams.get('status') || undefined;
+      const limit = parseInt(searchParams.get('limit') || '50');
+      const offset = parseInt(searchParams.get('offset') || '0');
+      
+      // Parse date filters
+      const dateFromStr = searchParams.get('dateFrom');
+      const dateToStr = searchParams.get('dateTo');
+      const dateFrom = dateFromStr ? new Date(dateFromStr) : undefined;
+      const dateTo = dateToStr ? new Date(dateToStr) : undefined;
 
-    // Transform Prisma data to match our interface
-    const transformedMessages = messages.map(message => ({
-      id: message.id,
-      type: message.type as 'SMS' | 'WHATSAPP' | 'EMAIL',
-      direction: message.direction as 'INBOUND' | 'OUTBOUND',
-      content: message.content,
-      status: message.status as 'PENDING' | 'SENT' | 'DELIVERED' | 'READ' | 'FAILED' | 'REPLIED',
-      contactName: message.contact.name || 'Unknown',
-      contactPhone: message.contact.phone,
-      contactEmail: message.contact.email,
-      campaignName: message.campaign?.name,
-      sentBy: message.sentBy?.name,
-      sentAt: message.sentAt?.toISOString(),
-      deliveredAt: message.deliveredAt?.toISOString(),
-      readAt: message.readAt?.toISOString(),
-      createdAt: message.createdAt.toISOString()
-    }))
-
-    return NextResponse.json(transformedMessages)
-  } catch (error) {
-    console.error('Database error in /api/messages:', error)
-    // Return error so DataService falls back to JSON data
-    return NextResponse.json(
-      { error: 'Database not available' },
-      { status: 503 }
-    )
-  }
-}
-
-export async function POST(request: NextRequest) {
-  try {
-    const data = await request.json()
-    
-    // Find or create contact
-    let contact = await prisma.contact.findFirst({
-      where: { phone: data.contactPhone }
-    })
-    
-    if (!contact) {
-      contact = await prisma.contact.create({
-        data: {
-          phone: data.contactPhone,
-          name: data.contactName,
-          email: data.contactEmail
-        }
-      })
-    }
-    
-    const message = await prisma.message.create({
-      data: {
-        type: data.type,
-        direction: data.direction,
-        content: data.content,
-        status: data.status || 'PENDING',
-        contactId: contact.id,
-        sentAt: data.sentAt ? new Date(data.sentAt) : null
+      // Validate limit
+      if (limit > 100) {
+        return NextResponse.json(
+          { error: 'Limit cannot exceed 100' },
+          { status: 400 }
+        );
       }
-    })
 
-    return NextResponse.json(message)
-  } catch (error) {
-    console.error('Error creating message:', error)
-    return NextResponse.json(
-      { error: 'Failed to create message' },
-      { status: 500 }
-    )
-  }
+      // Use DataService for consistency
+      const messages = await DataService.getMessages();
+      
+      // Apply filters
+      let filteredMessages = messages;
+      
+      if (contactId) {
+        filteredMessages = filteredMessages.filter(m => m.contactId === contactId);
+      }
+      
+      if (campaignId) {
+        filteredMessages = filteredMessages.filter(m => m.campaignId === campaignId);
+      }
+      
+      if (type) {
+        filteredMessages = filteredMessages.filter(m => m.type === type);
+      }
+      
+      if (direction) {
+        filteredMessages = filteredMessages.filter(m => m.direction === direction);
+      }
+      
+      if (status) {
+        filteredMessages = filteredMessages.filter(m => m.status === status);
+      }
+      
+      if (dateFrom) {
+        filteredMessages = filteredMessages.filter(m => new Date(m.createdAt) >= dateFrom);
+      }
+      
+      if (dateTo) {
+        filteredMessages = filteredMessages.filter(m => new Date(m.createdAt) <= dateTo);
+      }
+
+      // Apply pagination
+      const total = filteredMessages.length;
+      const paginatedMessages = filteredMessages.slice(offset, offset + limit);
+
+      return NextResponse.json({
+        success: true,
+        messages: paginatedMessages,
+        pagination: {
+          total,
+          limit,
+          offset,
+          hasMore: total > offset + limit,
+        },
+      });
+    } catch (error) {
+      logger.error('Messages list API error', error);
+      return NextResponse.json(
+        { error: 'Internal server error' },
+        { status: 500 }
+      );
+    }
+  });
 }

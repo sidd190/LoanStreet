@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
+import RouteProtection from '../../components/RouteProtection'
 import { 
   Calendar, 
   Clock, 
@@ -23,7 +24,7 @@ import AdminLayout from '../components/AdminLayout'
 import toast from 'react-hot-toast'
 import DataService, { AutomationRule } from '../../../lib/dataService'
 
-export default function AutomationPage() {
+function AutomationPageContent() {
   const [automations, setAutomations] = useState<AutomationRule[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -444,5 +445,13 @@ export default function AutomationPage() {
         </motion.div>
       </div>
     </AdminLayout>
+  )
+}
+
+export default function AutomationPage() {
+  return (
+    <RouteProtection requiredRole="ADMIN">
+      <AutomationPageContent />
+    </RouteProtection>
   )
 }

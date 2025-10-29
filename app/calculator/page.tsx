@@ -1,7 +1,9 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import React from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
+import { gsap } from 'gsap'
 import { 
   Calculator, 
   TrendingUp, 
@@ -22,10 +24,20 @@ export default function CalculatorPage() {
   const [emi, setEmi] = useState(0)
   const [totalInterest, setTotalInterest] = useState(0)
   const [totalAmount, setTotalAmount] = useState(0)
+  const emiRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     calculateEMI()
   }, [loanAmount, interestRate, tenure])
+
+  useEffect(() => {
+    if (emiRef.current) {
+      gsap.fromTo(emiRef.current, 
+        { scale: 0.8, opacity: 0 },
+        { scale: 1, opacity: 1, duration: 0.5, ease: 'back.out(1.7)' }
+      )
+    }
+  }, [emi])
 
   const calculateEMI = () => {
     const monthlyRate = interestRate / 100 / 12
@@ -224,11 +236,9 @@ export default function CalculatorPage() {
             <AnimatedSection delay={0.2}>
               <div className="space-y-6">
                 {/* EMI Result Card */}
-                <motion.div
-                  key={emi}
-                  initial={{ scale: 0.95 }}
-                  animate={{ scale: 1 }}
-                  className="bg-gradient-to-r from-primary-600 to-primary-700 text-white rounded-3xl p-8 shadow-xl"
+                <div
+                  ref={emiRef}
+                  className="bg-gradient-to-r from-primary-600 to-primary-700 text-white rounded-3xl p-8 shadow-xl hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-1"
                 >
                   <div className="text-center">
                     <p className="text-primary-100 mb-2">Monthly EMI</p>
@@ -244,7 +254,7 @@ export default function CalculatorPage() {
                       </div>
                     </div>
                   </div>
-                </motion.div>
+                </div>
 
                 {/* Breakdown Cards */}
                 <div className="grid grid-cols-2 gap-4">

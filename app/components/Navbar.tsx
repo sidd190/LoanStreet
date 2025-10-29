@@ -1,5 +1,6 @@
 'use client'
 
+import React from 'react'
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { motion } from 'framer-motion'
@@ -54,8 +55,11 @@ export default function Navbar() {
           <div className="flex justify-between items-center h-16">
             <Link href="/" className="flex items-center">
               <motion.div
-                whileHover={{ scale: 1.05 }}
-                className="text-2xl font-bold bg-gradient-to-r from-primary-600 to-primary-800 bg-clip-text text-transparent"
+                whileHover={{ 
+                  scale: 1.05,
+                  textShadow: "0 0 8px rgba(37, 99, 235, 0.3)"
+                }}
+                className="text-2xl font-bold bg-gradient-to-r from-primary-600 to-primary-800 bg-clip-text text-transparent gradient-animate"
               >
                 QuickLoan
               </motion.div>
@@ -63,16 +67,28 @@ export default function Navbar() {
 
             {/* Desktop Menu */}
             <div className="hidden md:flex items-center space-x-8">
-              <Link href="/" className="nav-link">Home</Link>
-              <Link href="/services" className="nav-link">Services</Link>
-              <Link href="/about" className="nav-link">About</Link>
-              <Link href="/contact" className="nav-link">Contact</Link>
-              <Link href="/apply" className="btn-primary">
-                Apply Now
-              </Link>
-              <Link href="/admin" className="btn-secondary">
-                Admin Login
-              </Link>
+              <motion.div whileHover={{ y: -2 }}>
+                <Link href="/" className="nav-link">Home</Link>
+              </motion.div>
+              <motion.div whileHover={{ y: -2 }}>
+                <Link href="/services" className="nav-link">Services</Link>
+              </motion.div>
+              <motion.div whileHover={{ y: -2 }}>
+                <Link href="/about" className="nav-link">About</Link>
+              </motion.div>
+              <motion.div whileHover={{ y: -2 }}>
+                <Link href="/contact" className="nav-link">Contact</Link>
+              </motion.div>
+              <motion.div whileHover={{ scale: 1.05, y: -2 }}>
+                <Link href="/apply" className="btn-primary animate-glow">
+                  Apply Now
+                </Link>
+              </motion.div>
+              <motion.div whileHover={{ scale: 1.05, y: -2 }}>
+                <Link href="/admin" className="btn-secondary">
+                  Admin Login
+                </Link>
+              </motion.div>
             </div>
 
             {/* Mobile Menu Button */}

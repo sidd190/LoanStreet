@@ -1,47 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { PrismaClient } from '@prisma/client'
-
-const prisma = new PrismaClient()
+import { getAutomationService } from '../../../lib/automationService'
 
 export async function GET(request: NextRequest) {
   try {
-    console.log('✅ Automations API called - attempting database connection')
+    console.log('✅ Automations API called - fetching from automation service')
     
-    // Try to get automations from database
-    const automations = await prisma.automation.findMany({
-      orderBy: {
-        createdAt: 'desc'
-      }
+    const automationService = getAutomationService()
+    const automations = await automationService.getAutomations()
+
+    console.log('✅ Successfully loaded automations from service')
+    return NextResponse.json({
+      success: true,
+      automations
     })
-
-    // Transform Prisma data to match our interface
-    const transformedAutomations = automations.map(automation => ({
-      id: automation.id,
-      name: automation.name,
-      description: automation.description || '',
-      type: automation.type,
-      status: automation.isActive ? 'active' : 'paused',
-      schedule: JSON.parse(automation.schedule || '{}'),
-      conditions: JSON.parse(automation.conditions || '{}'),
-      actions: JSON.parse(automation.actions || '[]'),
-      stats: {
-        totalRuns: automation.totalRuns || 0,
-        successfulRuns: automation.successfulRuns || 0,
-        lastRun: automation.lastRun?.toISOString(),
-        nextRun: automation.nextRun?.toISOString()
-      },
-      createdAt: automation.createdAt.toISOString(),
-      updatedAt: automation.updatedAt.toISOString()
-    }))
-
-    console.log('✅ Successfully loaded automations from database')
-    return NextResponse.json(transformedAutomations)
   } catch (error) {
-    console.error('⚠️ Database error in /api/automations, will fallback to JSON data:', error)
-    // Return error so DataService falls back to JSON data
+    console.error('⚠️ Error in /api/automations:', error)
     return NextResponse.json(
-      { error: 'Database not available' },
-      { status: 503 }
+      { error: 'Failed to fetch automations' },
+      { status: 500 }
     )
   }
 }
@@ -50,20 +26,19 @@ export async function POST(request: NextRequest) {
   try {
     const data = await request.json()
     
-    const automation = await prisma.automation.create({
-      data: {
-        name: data.name,
-        description: data.description,
-        type: data.type,
-        isActive: data.status === 'active',
-        schedule: JSON.stringify(data.schedule),
-        conditions: JSON.stringify(data.conditions),
-        actions: JSON.stringify(data.actions)
-      }
+    const automationService = getAutomationService()
+    const automationId = await automationService.createAutomation({
+      name: data.name,
+      description: data.description,
+      type: data.type,
+      status: data.status || 'draft',
+      schedule: data.schedule,
+      conditions: data.conditions,
+      actions: data.actions
     })
 
-    console.log('✅ Successfully created automation in database')
-    return NextResponse.json(automation)
+    console.log('✅ Successfully created automation in service')
+    return NextResponse.json({ id: automationId, success: true })
   } catch (error) {
     console.error('❌ Error creating automation:', error)
     return NextResponse.json(

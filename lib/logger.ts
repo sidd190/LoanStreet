@@ -1,4 +1,6 @@
 // Enhanced logging system for data source tracking
+import { errorTracker, ErrorCategory } from './security/errorTracking'
+import { auditLogger, AuditEventType } from './security/auditLogger'
 
 export enum LogLevel {
   INFO = 'INFO',
@@ -118,6 +120,17 @@ class Logger {
 
   static error(source: DataSource, operation: string, message: string, error?: any) {
     this.logDataSource(LogLevel.ERROR, source, operation, message, undefined, error)
+    
+    // Track error in security system
+    if (error) {
+      errorTracker.trackError(error, {
+        timestamp: new Date()
+      }, {
+        source,
+        operation,
+        dataSource: true
+      }).catch(err => console.error('Failed to track error:', err))
+    }
   }
 
   static getLogs(): LogEntry[] {
@@ -143,3 +156,4 @@ class Logger {
 }
 
 export default Logger
+export const logger = Logger

@@ -1,5 +1,6 @@
 'use client'
 
+import React from 'react'
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { 
@@ -8,18 +9,19 @@ import {
   TrendingUp, 
   Calendar,
   Phone,
-  Mail,
   Target,
   Activity,
   BarChart3,
-  PieChart,
   ArrowUpRight,
   ArrowDownRight
 } from 'lucide-react'
-import AdminLayout from '../components/AdminLayout'
+import AdminLayout, { AdminContext } from '../components/AdminLayout'
 import DataService from '../../../lib/dataService'
+import { useRouter } from 'next/navigation'
+import toast from 'react-hot-toast'
 
 export default function AdminDashboard() {
+  const router = useRouter()
   const [stats, setStats] = useState({
     totalContacts: 0,
     totalCampaigns: 0,
@@ -30,33 +32,72 @@ export default function AdminDashboard() {
     responseRate: 0,
     recentActivity: []
   })
+  const [statsLoading, setStatsLoading] = useState(false)
 
-  const [userRole, setUserRole] = useState('')
+  const { user, loading: userLoading } = React.useContext(AdminContext)
+
+
 
   useEffect(() => {
-    // Get user role from localStorage
-    const role = localStorage.getItem('userRole') || 'EMPLOYEE'
-    setUserRole(role)
-    
-    // Fetch dashboard stats
-    fetchDashboardStats()
-  }, [])
+    // Only fetch dashboard stats once when user is available, not loading, and stats haven't been loaded
+    if (user && !userLoading && stats.totalContacts === 0 && !statsLoading) {
+      fetchDashboardStats()
+    }
+  }, [user, userLoading, stats.totalContacts, statsLoading])
 
   const fetchDashboardStats = async () => {
+    if (statsLoading) return // Prevent multiple simultaneous calls
+    
     try {
-      console.log('🔄 Fetching dashboard stats...')
+      setStatsLoading(true)
       const data = await DataService.getDashboardStats()
       setStats(data)
-      console.log('✅ Dashboard stats loaded successfully')
     } catch (error) {
-      console.error('❌ Failed to fetch dashboard stats:', error)
+      console.error('Failed to fetch dashboard stats:', error)
+      toast.error('Failed to load dashboard statistics')
+    } finally {
+      setStatsLoading(false)
+    }
+  }
+
+  const handleNewCampaign = () => {
+    router.push('/admin/campaigns/create')
+  }
+
+  const handleImportContacts = () => {
+    router.push('/admin/import')
+  }
+
+  const handleViewMessages = () => {
+    router.push('/admin/messages')
+  }
+
+  const handleManageLeads = () => {
+    router.push('/admin/leads')
+  }
+
+  const testWhatsAppAPI = async () => {
+    try {
+      const response = await fetch('/api/test/whatsapp', {
+        method: 'GET',
+        credentials: 'include'
+      })
+      const result = await response.json()
+      
+      if (result.status === 'ready') {
+        toast.success('WhatsApp API is configured and ready!')
+      } else {
+        toast.error('WhatsApp API needs configuration. Check environment variables.')
+      }
+    } catch (error) {
+      toast.error('Failed to check WhatsApp API status')
     }
   }
 
   const statCards = [
     {
       title: 'Total Contacts',
-      value: '12,543',
+      value: stats.totalContacts?.toLocaleString() || '0',
       change: '+12%',
       changeType: 'positive',
       icon: Users,
@@ -64,7 +105,7 @@ export default function AdminDashboard() {
     },
     {
       title: 'Active Campaigns',
-      value: '8',
+      value: stats.totalCampaigns?.toString() || '0',
       change: '+2',
       changeType: 'positive', 
       icon: Target,
@@ -72,7 +113,7 @@ export default function AdminDashboard() {
     },
     {
       title: 'Messages Sent',
-      value: '45,231',
+      value: stats.totalMessages?.toLocaleString() || '0',
       change: '+18%',
       changeType: 'positive',
       icon: MessageSquare,
@@ -80,7 +121,7 @@ export default function AdminDashboard() {
     },
     {
       title: 'Response Rate',
-      value: '24.5%',
+      value: `${stats.responseRate || 0}%`,
       change: '-2.1%',
       changeType: 'negative',
       icon: TrendingUp,
@@ -88,7 +129,7 @@ export default function AdminDashboard() {
     }
   ]
 
-  const recentActivities = [
+  const recentActivities = stats.recentActivity || [
     {
       id: 1,
       type: 'campaign',
@@ -118,6 +159,17 @@ export default function AdminDashboard() {
       user: 'Admin User'
     }
   ]
+
+  // Show loading state while user context is loading
+  if (userLoading) {
+    return (
+      <AdminLayout>
+        <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary-600"></div>
+        </div>
+      </AdminLayout>
+    )
+  }
 
   return (
     <AdminLayout>
@@ -223,7 +275,7 @@ export default function AdminDashboard() {
             </div>
             
             <div className="space-y-4">
-              {recentActivities.map((activity) => (
+              {recentActivities.map((activity: any) => (
                 <div key={activity.id} className="flex items-start space-x-3">
                   <div className="w-2 h-2 bg-primary-500 rounded-full mt-2"></div>
                   <div className="flex-1 min-w-0">
@@ -250,29 +302,51 @@ export default function AdminDashboard() {
           <h3 className="text-lg font-semibold text-gray-900 mb-6">Quick Actions</h3>
           
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {userRole === 'ADMIN' && (
+            {user?.role === 'ADMIN' && (
               <>
-                <button className="flex flex-col items-center p-4 bg-primary-50 hover:bg-primary-100 rounded-lg transition-colors duration-200">
+                <button 
+                  onClick={handleNewCampaign}
+                  className="flex flex-col items-center p-4 bg-primary-50 hover:bg-primary-100 rounded-lg transition-colors duration-200"
+                >
                   <Target className="w-8 h-8 text-primary-600 mb-2" />
                   <span className="text-sm font-medium text-primary-700">New Campaign</span>
                 </button>
                 
-                <button className="flex flex-col items-center p-4 bg-green-50 hover:bg-green-100 rounded-lg transition-colors duration-200">
+                <button 
+                  onClick={handleImportContacts}
+                  className="flex flex-col items-center p-4 bg-green-50 hover:bg-green-100 rounded-lg transition-colors duration-200"
+                >
                   <Users className="w-8 h-8 text-green-600 mb-2" />
                   <span className="text-sm font-medium text-green-700">Import Contacts</span>
                 </button>
               </>
             )}
             
-            <button className="flex flex-col items-center p-4 bg-purple-50 hover:bg-purple-100 rounded-lg transition-colors duration-200">
+            <button 
+              onClick={handleViewMessages}
+              className="flex flex-col items-center p-4 bg-purple-50 hover:bg-purple-100 rounded-lg transition-colors duration-200"
+            >
               <MessageSquare className="w-8 h-8 text-purple-600 mb-2" />
               <span className="text-sm font-medium text-purple-700">View Messages</span>
             </button>
             
-            <button className="flex flex-col items-center p-4 bg-orange-50 hover:bg-orange-100 rounded-lg transition-colors duration-200">
+            <button 
+              onClick={handleManageLeads}
+              className="flex flex-col items-center p-4 bg-orange-50 hover:bg-orange-100 rounded-lg transition-colors duration-200"
+            >
               <Phone className="w-8 h-8 text-orange-600 mb-2" />
               <span className="text-sm font-medium text-orange-700">Manage Leads</span>
             </button>
+            
+            {user?.role === 'ADMIN' && (
+              <button 
+                onClick={testWhatsAppAPI}
+                className="flex flex-col items-center p-4 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors duration-200"
+              >
+                <MessageSquare className="w-8 h-8 text-indigo-600 mb-2" />
+                <span className="text-sm font-medium text-indigo-700">Test WhatsApp</span>
+              </button>
+            )}
           </div>
         </motion.div>
       </div>

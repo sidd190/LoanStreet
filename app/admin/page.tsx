@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import React from 'react'
+import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { Eye, EyeOff, Lock, Mail, User } from 'lucide-react'
 import { useRouter } from 'next/navigation'
@@ -15,6 +16,9 @@ export default function AdminLogin() {
   })
   const router = useRouter()
 
+  // Note: Authentication check removed to prevent redirect loops
+  // AdminLayout will handle authentication and redirect if needed
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
@@ -25,6 +29,7 @@ export default function AdminLogin() {
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'include', // Ensure cookies are sent/received
         body: JSON.stringify(formData),
       })
 
@@ -32,8 +37,6 @@ export default function AdminLogin() {
 
       if (response.ok) {
         toast.success('Login successful!')
-        localStorage.setItem('adminToken', data.token)
-        localStorage.setItem('userRole', data.user.role)
         router.push('/admin/dashboard')
       } else {
         toast.error(data.message || 'Login failed')

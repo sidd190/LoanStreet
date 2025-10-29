@@ -19,7 +19,11 @@ export interface Lead {
   priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT'
   source: string
   score: number
-  assignedTo?: string
+  assignedTo?: {
+    id: string
+    name: string
+    email: string
+  }
   lastContact?: string | null
   createdAt: string
   notes?: string
@@ -114,7 +118,9 @@ export interface AutomationRule {
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
 // API base URL - in production this would be your actual API endpoint
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '/api'
+const API_BASE_URL = typeof window !== 'undefined' 
+  ? (process.env.NEXT_PUBLIC_API_URL || '/api')
+  : (process.env.NEXT_PUBLIC_API_URL || `http://localhost:${process.env.PORT || 3000}/api`)
 
 // Helper function to try API first, then fallback to JSON data
 async function tryApiThenFallback<T>(
@@ -144,7 +150,8 @@ export class DataService {
       async () => {
         const response = await fetch(`${API_BASE_URL}/leads`)
         if (!response.ok) throw new Error(`HTTP ${response.status}`)
-        return response.json()
+        const data = await response.json()
+        return data.success ? data.leads : data
       },
       leadsData as Lead[],
       'leads'
@@ -172,7 +179,8 @@ export class DataService {
           body: JSON.stringify(updates)
         })
         if (!response.ok) throw new Error(`HTTP ${response.status}`)
-        return response.json()
+        const data = await response.json()
+        return data.success ? data.lead : data
       },
       null, // For updates, we don't have fallback data
       `lead update ${id}`
@@ -199,7 +207,8 @@ export class DataService {
       async () => {
         const response = await fetch(`${API_BASE_URL}/contacts`)
         if (!response.ok) throw new Error(`HTTP ${response.status}`)
-        return response.json()
+        const data = await response.json()
+        return data.success ? data.contacts : data
       },
       contactsData as Contact[],
       'contacts'
@@ -270,7 +279,8 @@ export class DataService {
       async () => {
         const response = await fetch(`${API_BASE_URL}/campaigns`)
         if (!response.ok) throw new Error(`HTTP ${response.status}`)
-        return response.json()
+        const data = await response.json()
+        return data.success ? data.campaigns : data
       },
       campaignsData as Campaign[],
       'campaigns'
@@ -325,7 +335,8 @@ export class DataService {
       async () => {
         const response = await fetch(`${API_BASE_URL}/messages`)
         if (!response.ok) throw new Error(`HTTP ${response.status}`)
-        return response.json()
+        const data = await response.json()
+        return data.success ? data.messages : data
       },
       messagesData as Message[],
       'messages'
@@ -347,13 +358,15 @@ export class DataService {
   static async sendMessage(message: Omit<Message, 'id' | 'createdAt'>): Promise<Message> {
     return tryApiThenFallback(
       async () => {
-        const response = await fetch(`${API_BASE_URL}/messages`, {
+        const response = await fetch(`${API_BASE_URL}/messages/send`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
           body: JSON.stringify(message)
         })
         if (!response.ok) throw new Error(`HTTP ${response.status}`)
-        return response.json()
+        const data = await response.json()
+        return data.success ? data.message : data
       },
       {
         ...message,
@@ -364,13 +377,37 @@ export class DataService {
     )
   }
 
+  static async createCampaign(campaign: Omit<Campaign, 'id' | 'createdAt' | 'updatedAt'>): Promise<Campaign> {
+    return tryApiThenFallback(
+      async () => {
+        const response = await fetch(`${API_BASE_URL}/campaigns`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify(campaign)
+        })
+        if (!response.ok) throw new Error(`HTTP ${response.status}`)
+        const data = await response.json()
+        return data.success ? data.campaign : data
+      },
+      {
+        ...campaign,
+        id: Date.now().toString(),
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      } as Campaign,
+      'campaign creation'
+    )
+  }
+
   // Automations
   static async getAutomations(): Promise<AutomationRule[]> {
     return tryApiThenFallback(
       async () => {
         const response = await fetch(`${API_BASE_URL}/automations`)
         if (!response.ok) throw new Error(`HTTP ${response.status}`)
-        return response.json()
+        const data = await response.json()
+        return data.success ? data.automations : data
       },
       automationsData as AutomationRule[],
       'automations'
@@ -439,9 +476,12 @@ export class DataService {
   static async getDashboardStats(): Promise<any> {
     return tryApiThenFallback(
       async () => {
-        const response = await fetch(`${API_BASE_URL}/dashboard/stats`)
+        const response = await fetch(`${API_BASE_URL}/dashboard/stats`, {
+          credentials: 'include' // Ensure cookies are included
+        })
         if (!response.ok) throw new Error(`HTTP ${response.status}`)
-        return response.json()
+        const data = await response.json()
+        return data.success ? data.data : data
       },
       (() => {
         // Generate fallback stats from JSON data
