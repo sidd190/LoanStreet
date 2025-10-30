@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { withAuthAndRole } from '@/lib/middleware/auth'
 import DataService from '@/lib/dataService'
+import { broadcastMessageReceived, broadcastMessageStatusUpdate } from '@/lib/realTimeMessaging'
 
 // POST /api/messages/send - Both admin and employee can send messages
 export async function POST(request: NextRequest) {
@@ -27,6 +28,23 @@ export async function POST(request: NextRequest) {
       messageData.type = messageData.type || 'WHATSAPP'
       
       const message = await DataService.sendMessage(messageData)
+      
+      // Broadcast message to real-time subscribers
+      try {
+        const contactId = messageData.contactPhone // Using phone as contactId for now
+        broadcastMessageReceived(contactId, message)
+        
+        // Simulate status updates for demo purposes
+        setTimeout(() => {
+          broadcastMessageStatusUpdate(contactId, message.id, 'DELIVERED')
+        }, 2000)
+        
+        setTimeout(() => {
+          broadcastMessageStatusUpdate(contactId, message.id, 'READ')
+        }, 5000)
+      } catch (broadcastError) {
+        console.error('Failed to broadcast message:', broadcastError)
+      }
       
       // Log employee action if user is employee
       if (req.user!.role === 'EMPLOYEE') {

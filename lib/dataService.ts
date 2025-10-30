@@ -473,11 +473,17 @@ export class DataService {
   }
 
   // Analytics
-  static async getDashboardStats(): Promise<any> {
+  static async getDashboardStats(forceRefresh: boolean = false): Promise<any> {
     return tryApiThenFallback(
       async () => {
-        const response = await fetch(`${API_BASE_URL}/dashboard/stats`, {
-          credentials: 'include' // Ensure cookies are included
+        const url = new URL(`${API_BASE_URL}/dashboard/stats`)
+        if (forceRefresh) {
+          url.searchParams.set('refresh', 'true')
+        }
+        
+        const response = await fetch(url.toString(), {
+          credentials: 'include', // Ensure cookies are included
+          headers: forceRefresh ? { 'Cache-Control': 'no-cache' } : {}
         })
         if (!response.ok) throw new Error(`HTTP ${response.status}`)
         const data = await response.json()
@@ -496,31 +502,34 @@ export class DataService {
           totalMessages: messages.length,
           totalLeads: leads.length,
           activeUsers: 8,
+          activeCampaigns: campaigns.filter(c => c.status === 'RUNNING' || c.status === 'SCHEDULED').length,
           responseRate: 24.5,
           conversionRate: 12.8,
+          deliveryRate: 96.2,
           recentActivity: [
             {
-              id: 1,
+              id: '1',
               type: 'campaign',
               title: 'Personal Loan Campaign launched',
               time: '2 hours ago',
               user: 'Admin User'
             },
             {
-              id: 2,
+              id: '2',
               type: 'message',
               title: 'WhatsApp message sent to 500 contacts',
               time: '4 hours ago',
               user: 'Marketing Team'
             },
             {
-              id: 3,
+              id: '3',
               type: 'lead',
               title: 'New lead: Rajesh Kumar - ₹5L Personal Loan',
               time: '6 hours ago',
               user: 'System'
             }
-          ]
+          ],
+          lastUpdated: new Date().toISOString()
         }
       })(),
       'dashboard stats'

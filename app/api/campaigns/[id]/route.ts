@@ -101,13 +101,36 @@ export async function PATCH(
         )
       }
 
-      // Check if campaign can be edited based on status
+      // Check if campaign can be edited based on status and operation
       const editableStatuses = ['DRAFT', 'SCHEDULED']
-      if (!editableStatuses.includes(existingCampaign.status) && !data.status) {
+      const statusChangeOperations = ['RUNNING', 'PAUSED', 'CANCELLED', 'COMPLETED']
+      
+      if (!editableStatuses.includes(existingCampaign.status) && 
+          !statusChangeOperations.includes(data.status) && 
+          !data.status) {
         return NextResponse.json(
           { error: 'Campaign cannot be edited in current status' },
           { status: 400 }
         )
+      }
+
+      // Validate status transitions
+      if (data.status) {
+        const validTransitions: Record<string, string[]> = {
+          'DRAFT': ['SCHEDULED', 'RUNNING', 'CANCELLED'],
+          'SCHEDULED': ['RUNNING', 'CANCELLED', 'DRAFT'],
+          'RUNNING': ['PAUSED', 'CANCELLED', 'COMPLETED'],
+          'PAUSED': ['RUNNING', 'CANCELLED'],
+          'COMPLETED': [],
+          'CANCELLED': []
+        }
+
+        if (!validTransitions[existingCampaign.status]?.includes(data.status)) {
+          return NextResponse.json(
+            { error: `Cannot change status from ${existingCampaign.status} to ${data.status}` },
+            { status: 400 }
+          )
+        }
       }
 
       const updateData: any = {
@@ -127,9 +150,14 @@ export async function PATCH(
       if (data.status !== undefined) {
         updateData.status = data.status
         
-        // Set sentAt when campaign starts running
+        // Set sentAt when campaign starts running for the first time
         if (data.status === 'RUNNING' && !existingCampaign.sentAt) {
           updateData.sentAt = new Date()
+        }
+        
+        // Set completedAt when campaign is completed or cancelled
+        if (['COMPLETED', 'CANCELLED'].includes(data.status)) {
+          updateData.completedAt = new Date()
         }
       }
 
@@ -155,6 +183,7 @@ export async function PATCH(
         status: campaign.status as 'DRAFT' | 'SCHEDULED' | 'RUNNING' | 'COMPLETED' | 'PAUSED' | 'CANCELLED',
         scheduledAt: campaign.scheduledAt?.toISOString(),
         sentAt: campaign.sentAt?.toISOString(),
+        completedAt: campaign.completedAt?.toISOString(),
         totalContacts: campaign._count.contacts,
         totalSent: campaign.totalSent,
         totalDelivered: campaign.totalDelivered,

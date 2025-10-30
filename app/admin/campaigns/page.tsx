@@ -26,9 +26,13 @@ import {
   Send,
   CheckCircle,
   XCircle,
-  AlertCircle
+  AlertCircle,
+  X,
+  Activity
 } from 'lucide-react'
 import AdminLayout from '../components/AdminLayout'
+import CampaignProgress from './components/CampaignProgress'
+import CampaignAnalytics from './components/CampaignAnalytics'
 import toast from 'react-hot-toast'
 import DataService, { Campaign } from '../../../lib/dataService'
 
@@ -41,6 +45,8 @@ function CampaignsPageContent() {
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState('ALL')
   const [typeFilter, setTypeFilter] = useState('ALL')
+  const [activeTab, setActiveTab] = useState<'campaigns' | 'analytics'>('campaigns')
+  const [selectedCampaignForProgress, setSelectedCampaignForProgress] = useState<string | null>(null)
 
   useEffect(() => {
     loadCampaigns()
@@ -190,8 +196,39 @@ function CampaignsPageContent() {
           </button>
         </div>
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-6 gap-6">
+        {/* Tab Navigation */}
+        <div className="border-b border-gray-200">
+          <nav className="-mb-px flex space-x-8">
+            <button
+              onClick={() => setActiveTab('campaigns')}
+              className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'campaigns'
+                  ? 'border-primary-500 text-primary-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <Target className="w-4 h-4 mr-2 inline" />
+              Campaigns
+            </button>
+            <button
+              onClick={() => setActiveTab('analytics')}
+              className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'analytics'
+                  ? 'border-primary-500 text-primary-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <BarChart3 className="w-4 h-4 mr-2 inline" />
+              Analytics
+            </button>
+          </nav>
+        </div>
+
+        {/* Tab Content */}
+        {activeTab === 'campaigns' && (
+          <>
+            {/* Stats Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-6 gap-6">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -414,6 +451,15 @@ function CampaignsPageContent() {
                     >
                       <Eye className="w-4 h-4" />
                     </button>
+                    {['RUNNING', 'PAUSED', 'SCHEDULED'].includes(campaign.status) && (
+                      <button
+                        onClick={() => setSelectedCampaignForProgress(campaign.id)}
+                        className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"
+                        title="View Progress"
+                      >
+                        <Activity className="w-4 h-4" />
+                      </button>
+                    )}
                     <button 
                       onClick={() => router.push(`/admin/campaigns/${campaign.id}/edit`)}
                       className="p-2 text-gray-600 hover:bg-gray-50 rounded-lg"
@@ -499,10 +545,45 @@ function CampaignsPageContent() {
           })}
         </div>
 
-        {filteredCampaigns.length === 0 && (
-          <div className="text-center py-12">
-            <Target className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-            <p className="text-gray-500">No campaigns found matching your criteria</p>
+            {filteredCampaigns.length === 0 && (
+              <div className="text-center py-12">
+                <Target className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                <p className="text-gray-500">No campaigns found matching your criteria</p>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* Analytics Tab */}
+        {activeTab === 'analytics' && (
+          <CampaignAnalytics />
+        )}
+
+        {/* Campaign Progress Modal */}
+        {selectedCampaignForProgress && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-xl shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+              <div className="p-6 border-b border-gray-200">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-xl font-semibold text-gray-900">Campaign Progress</h2>
+                  <button
+                    onClick={() => setSelectedCampaignForProgress(null)}
+                    className="text-gray-400 hover:text-gray-600"
+                  >
+                    <X className="w-6 h-6" />
+                  </button>
+                </div>
+              </div>
+              <div className="p-6">
+                <CampaignProgress 
+                  campaignId={selectedCampaignForProgress}
+                  onStatusChange={(status) => {
+                    // Refresh campaigns list when status changes
+                    loadCampaigns()
+                  }}
+                />
+              </div>
+            </div>
           </div>
         )}
       </div>

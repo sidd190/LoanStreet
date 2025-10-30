@@ -77,7 +77,21 @@ export class CampaignExecutor {
         throw new Error('Campaign not found')
       }
 
+      // Check if campaign can be executed
+      if (!['DRAFT', 'SCHEDULED', 'PAUSED'].includes(campaign.status)) {
+        throw new Error(`Campaign cannot be executed in ${campaign.status} status`)
+      }
+
       if (campaign.contacts.length === 0) {
+        // Mark as completed if no pending contacts
+        await prisma.campaign.update({
+          where: { id: campaignId },
+          data: { 
+            status: 'COMPLETED',
+            completedAt: new Date()
+          }
+        })
+        
         return {
           success: true,
           totalProcessed: 0,
@@ -113,16 +127,18 @@ export class CampaignExecutor {
         userId
       }
 
-      // Execute bulk messaging
-      const result = await this.sendBulkMessages(bulkParams)
+      // Execute bulk messaging with pause/cancel checking
+      const result = await this.sendBulkMessagesWithControl(bulkParams)
 
-      // Update campaign statistics
+      // Update campaign statistics and status
+      const finalStatus = this.determineFinalStatus(campaignId, result, campaign.contacts.length)
       await prisma.campaign.update({
         where: { id: campaignId },
         data: {
-          totalSent: result.successCount,
-          totalFailed: result.failureCount,
-          status: result.totalProcessed === campaign.contacts.length ? 'COMPLETED' : 'RUNNING'
+          totalSent: campaign.totalSent + result.successCount,
+          totalFailed: campaign.totalFailed + result.failureCount,
+          status: finalStatus,
+          completedAt: finalStatus === 'COMPLETED' ? new Date() : undefined
         }
       })
 
@@ -135,7 +151,10 @@ export class CampaignExecutor {
       // Update campaign status to cancelled
       await prisma.campaign.update({
         where: { id: campaignId },
-        data: { status: 'CANCELLED' }
+        data: { 
+          status: 'CANCELLED',
+          completedAt: new Date()
+        }
       }).catch(updateError => {
         logger.error('Failed to update campaign status after error', updateError)
       })
@@ -151,7 +170,226 @@ export class CampaignExecutor {
   }
 
   /**
-   * Send bulk messages to multiple contacts
+   * Pause a running campaign
+   */
+  async pauseCampaign(campaignId: string): Promise<boolean> {
+    try {
+      const campaign = await prisma.campaign.findUnique({
+        where: { id: campaignId }
+      })
+
+      if (!campaign) {
+        throw new Error('Campaign not found')
+      }
+
+      if (campaign.status !== 'RUNNING') {
+        throw new Error('Only running campaigns can be paused')
+      }
+
+      await prisma.campaign.update({
+        where: { id: campaignId },
+        data: { 
+          status: 'PAUSED',
+          updatedAt: new Date()
+        }
+      })
+
+      logger.info(`Campaign paused: ${campaignId}`)
+      return true
+    } catch (error) {
+      logger.error(`Failed to pause campaign ${campaignId}:`, error)
+      return false
+    }
+  }
+
+  /**
+   * Resume a paused campaign
+   */
+  async resumeCampaign(campaignId: string): Promise<boolean> {
+    try {
+      const campaign = await prisma.campaign.findUnique({
+        where: { id: campaignId }
+      })
+
+      if (!campaign) {
+        throw new Error('Campaign not found')
+      }
+
+      if (campaign.status !== 'PAUSED') {
+        throw new Error('Only paused campaigns can be resumed')
+      }
+
+      await prisma.campaign.update({
+        where: { id: campaignId },
+        data: { 
+          status: 'RUNNING',
+          updatedAt: new Date()
+        }
+      })
+
+      logger.info(`Campaign resumed: ${campaignId}`)
+      return true
+    } catch (error) {
+      logger.error(`Failed to resume campaign ${campaignId}:`, error)
+      return false
+    }
+  }
+
+  /**
+   * Cancel a campaign
+   */
+  async cancelCampaign(campaignId: string): Promise<boolean> {
+    try {
+      const campaign = await prisma.campaign.findUnique({
+        where: { id: campaignId }
+      })
+
+      if (!campaign) {
+        throw new Error('Campaign not found')
+      }
+
+      if (['COMPLETED', 'CANCELLED'].includes(campaign.status)) {
+        throw new Error('Campaign is already completed or cancelled')
+      }
+
+      await prisma.campaign.update({
+        where: { id: campaignId },
+        data: { 
+          status: 'CANCELLED',
+          completedAt: new Date(),
+          updatedAt: new Date()
+        }
+      })
+
+      logger.info(`Campaign cancelled: ${campaignId}`)
+      return true
+    } catch (error) {
+      logger.error(`Failed to cancel campaign ${campaignId}:`, error)
+      return false
+    }
+  }
+
+  /**
+   * Send bulk messages with pause/cancel control
+   */
+  async sendBulkMessagesWithControl(params: BulkMessageParams): Promise<CampaignExecutionResult> {
+    const { contacts, type, templateName, parameters, mediaUrl, mediaType, userId, campaignId } = params
+    
+    let successCount = 0
+    let failureCount = 0
+    const errors: string[] = []
+    let totalProcessed = 0
+
+    try {
+      // Process contacts in batches with status checking
+      for (let i = 0; i < contacts.length; i += this.batchSize) {
+        // Check campaign status before each batch
+        const currentCampaign = await prisma.campaign.findUnique({
+          where: { id: campaignId },
+          select: { status: true }
+        })
+
+        if (currentCampaign?.status === 'PAUSED') {
+          logger.info(`Campaign ${campaignId} paused during execution at batch ${Math.floor(i / this.batchSize) + 1}`)
+          break
+        }
+
+        if (currentCampaign?.status === 'CANCELLED') {
+          logger.info(`Campaign ${campaignId} cancelled during execution at batch ${Math.floor(i / this.batchSize) + 1}`)
+          break
+        }
+
+        const batch = contacts.slice(i, i + this.batchSize)
+        const phoneNumbers = batch.map(contact => contact.phone)
+
+        logger.info(`Processing batch ${Math.floor(i / this.batchSize) + 1}: ${batch.length} contacts`)
+
+        try {
+          let result: SMSFreshResponse
+
+          if (type === 'WHATSAPP') {
+            if (mediaUrl && mediaType) {
+              result = await this.smsService.sendWhatsAppMedia({
+                phone: phoneNumbers,
+                templateName: templateName || 'default_template',
+                parameters: parameters ? Object.values(parameters) : [],
+                mediaType,
+                mediaUrl
+              })
+            } else {
+              result = await this.smsService.sendWhatsAppText({
+                phone: phoneNumbers,
+                templateName: templateName || 'default_template',
+                parameters: parameters ? Object.values(parameters) : []
+              })
+            }
+          } else {
+            result = await this.smsService.sendSMS({
+              phone: phoneNumbers,
+              templateName: templateName || 'default_template',
+              parameters: parameters ? Object.values(parameters) : []
+            })
+          }
+
+          if (result.success) {
+            successCount += batch.length
+            await this.updateContactStatuses(campaignId, batch.map(c => c.id), 'SENT', result.messageId)
+            await this.createMessageRecords(batch, params, 'SENT', result.messageId, userId)
+          } else {
+            failureCount += batch.length
+            errors.push(`Batch ${Math.floor(i / this.batchSize) + 1}: ${result.error}`)
+            await this.updateContactStatuses(campaignId, batch.map(c => c.id), 'FAILED')
+            await this.createMessageRecords(batch, params, 'FAILED', undefined, userId)
+          }
+        } catch (batchError) {
+          failureCount += batch.length
+          const errorMessage = batchError instanceof Error ? batchError.message : 'Unknown batch error'
+          errors.push(`Batch ${Math.floor(i / this.batchSize) + 1}: ${errorMessage}`)
+          logger.error(`Batch processing error:`, batchError)
+          
+          await this.updateContactStatuses(campaignId, batch.map(c => c.id), 'FAILED')
+          await this.createMessageRecords(batch, params, 'FAILED', undefined, userId)
+        }
+
+        totalProcessed += batch.length
+
+        // Update campaign progress
+        await prisma.campaign.update({
+          where: { id: campaignId },
+          data: {
+            totalSent: successCount,
+            totalFailed: failureCount,
+            updatedAt: new Date()
+          }
+        })
+
+        // Add delay between batches to respect rate limits
+        if (i + this.batchSize < contacts.length) {
+          await new Promise(resolve => setTimeout(resolve, this.batchDelay))
+        }
+      }
+
+      return {
+        success: errors.length === 0,
+        totalProcessed,
+        successCount,
+        failureCount,
+        errors
+      }
+    } catch (error) {
+      logger.error('Bulk messaging failed:', error)
+      return {
+        success: false,
+        totalProcessed,
+        successCount,
+        failureCount,
+        errors: [...errors, error instanceof Error ? error.message : 'Unknown error']
+      }
+    }
+  }
+
+  /**
+   * Send bulk messages to multiple contacts (legacy method)
    */
   async sendBulkMessages(params: BulkMessageParams): Promise<CampaignExecutionResult> {
     const { contacts, type, templateName, parameters, mediaUrl, mediaType, userId, campaignId } = params
@@ -804,6 +1042,30 @@ export class CampaignExecutor {
     }
 
     return recommendations
+  }
+
+  /**
+   * Determine final campaign status based on execution result
+   */
+  private async determineFinalStatus(campaignId: string, result: CampaignExecutionResult, totalContacts: number): Promise<string> {
+    // Check current campaign status
+    const campaign = await prisma.campaign.findUnique({
+      where: { id: campaignId },
+      select: { status: true }
+    })
+
+    // If campaign was paused or cancelled during execution, keep that status
+    if (campaign?.status === 'PAUSED' || campaign?.status === 'CANCELLED') {
+      return campaign.status
+    }
+
+    // If all contacts were processed, mark as completed
+    if (result.totalProcessed === totalContacts) {
+      return 'COMPLETED'
+    }
+
+    // Otherwise, keep as running (might be paused/cancelled later)
+    return 'RUNNING'
   }
 
   /**

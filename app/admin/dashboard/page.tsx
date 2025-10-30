@@ -1,7 +1,7 @@
 'use client'
 
 import React from 'react'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { motion } from 'framer-motion'
 import { 
   Users, 
@@ -13,52 +13,54 @@ import {
   Activity,
   BarChart3,
   ArrowUpRight,
-  ArrowDownRight
+  ArrowDownRight,
+  RefreshCw
 } from 'lucide-react'
 import AdminLayout, { AdminContext } from '../components/AdminLayout'
 import DataService from '../../../lib/dataService'
 import { useRouter } from 'next/navigation'
 import toast from 'react-hot-toast'
+import { DashboardSkeleton } from '../../components/SkeletonLoader'
+import { DashboardErrorBoundary } from '../../components/ErrorBoundary'
+import { RetryableComponent, useRetryableState } from '../../components/RetryableComponent'
 
 export default function AdminDashboard() {
   const router = useRouter()
-  const [stats, setStats] = useState({
-    totalContacts: 0,
-    totalCampaigns: 0,
-    totalMessages: 0,
-    totalLeads: 0,
-    activeUsers: 0,
-    conversionRate: 0,
-    responseRate: 0,
-    recentActivity: []
-  })
-  const [statsLoading, setStatsLoading] = useState(false)
-
   const { user, loading: userLoading } = React.useContext(AdminContext)
+  const [lastRefresh, setLastRefresh] = useState<Date>(new Date())
 
+  // Use retryable state for dashboard stats
+  const {
+    data: stats,
+    error: statsError,
+    loading: statsLoading,
+    retry: retryStats
+  } = useRetryableState(
+    () => DataService.getDashboardStats(),
+    [user?.id, lastRefresh]
+  )
 
-
-  useEffect(() => {
-    // Only fetch dashboard stats once when user is available, not loading, and stats haven't been loaded
-    if (user && !userLoading && stats.totalContacts === 0 && !statsLoading) {
-      fetchDashboardStats()
-    }
-  }, [user, userLoading, stats.totalContacts, statsLoading])
-
-  const fetchDashboardStats = async () => {
-    if (statsLoading) return // Prevent multiple simultaneous calls
-    
+  // Manual refresh function
+  const handleRefresh = useCallback(async () => {
     try {
-      setStatsLoading(true)
-      const data = await DataService.getDashboardStats()
-      setStats(data)
+      setLastRefresh(new Date())
+      await DataService.getDashboardStats(true) // Force refresh
+      toast.success('Dashboard refreshed successfully')
     } catch (error) {
-      console.error('Failed to fetch dashboard stats:', error)
-      toast.error('Failed to load dashboard statistics')
-    } finally {
-      setStatsLoading(false)
+      toast.error('Failed to refresh dashboard')
     }
-  }
+  }, [])
+
+  // Auto-refresh every 5 minutes
+  useEffect(() => {
+    if (!user || userLoading) return
+
+    const interval = setInterval(() => {
+      setLastRefresh(new Date())
+    }, 5 * 60 * 1000) // 5 minutes
+
+    return () => clearInterval(interval)
+  }, [user, userLoading])
 
   const handleNewCampaign = () => {
     router.push('/admin/campaigns/create')
@@ -97,7 +99,7 @@ export default function AdminDashboard() {
   const statCards = [
     {
       title: 'Total Contacts',
-      value: stats.totalContacts?.toLocaleString() || '0',
+      value: stats?.totalContacts?.toLocaleString() || '0',
       change: '+12%',
       changeType: 'positive',
       icon: Users,
@@ -105,7 +107,7 @@ export default function AdminDashboard() {
     },
     {
       title: 'Active Campaigns',
-      value: stats.totalCampaigns?.toString() || '0',
+      value: stats?.activeCampaigns?.toString() || '0',
       change: '+2',
       changeType: 'positive', 
       icon: Target,
@@ -113,7 +115,7 @@ export default function AdminDashboard() {
     },
     {
       title: 'Messages Sent',
-      value: stats.totalMessages?.toLocaleString() || '0',
+      value: stats?.totalMessages?.toLocaleString() || '0',
       change: '+18%',
       changeType: 'positive',
       icon: MessageSquare,
@@ -121,122 +123,115 @@ export default function AdminDashboard() {
     },
     {
       title: 'Response Rate',
-      value: `${stats.responseRate || 0}%`,
-      change: '-2.1%',
-      changeType: 'negative',
+      value: `${stats?.responseRate || 0}%`,
+      change: stats?.deliveryRate ? `${stats.deliveryRate}% delivered` : 'N/A',
+      changeType: 'positive',
       icon: TrendingUp,
       color: 'bg-orange-500'
     }
   ]
 
-  const recentActivities = stats.recentActivity || [
-    {
-      id: 1,
-      type: 'campaign',
-      title: 'Personal Loan Campaign launched',
-      time: '2 hours ago',
-      user: 'Admin User'
-    },
-    {
-      id: 2,
-      type: 'message',
-      title: 'WhatsApp message sent to 500 contacts',
-      time: '4 hours ago',
-      user: 'Marketing Team'
-    },
-    {
-      id: 3,
-      type: 'lead',
-      title: 'New lead: Rajesh Kumar - ₹5L Personal Loan',
-      time: '6 hours ago',
-      user: 'System'
-    },
-    {
-      id: 4,
-      type: 'user',
-      title: 'New employee added: Priya Sharma',
-      time: '1 day ago',
-      user: 'Admin User'
-    }
-  ]
+  const recentActivities = stats?.recentActivity || []
 
   // Show loading state while user context is loading
   if (userLoading) {
     return (
       <AdminLayout>
-        <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary-600"></div>
-        </div>
+        <DashboardSkeleton />
       </AdminLayout>
     )
   }
 
   return (
     <AdminLayout>
-      <div className="space-y-6">
-        {/* Header */}
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-            <p className="text-gray-600 mt-1">
-              Welcome back! Here's what's happening with your campaigns.
-            </p>
-          </div>
-          <div className="flex items-center space-x-3">
-            <div className="bg-white px-4 py-2 rounded-lg border border-gray-200">
-              <div className="flex items-center space-x-2">
-                <Calendar className="w-4 h-4 text-gray-500" />
-                <span className="text-sm text-gray-600">
-                  {new Date().toLocaleDateString('en-IN', { 
-                    weekday: 'long', 
-                    year: 'numeric', 
-                    month: 'long', 
-                    day: 'numeric' 
-                  })}
-                </span>
+      <DashboardErrorBoundary>
+        <RetryableComponent
+          onRetry={retryStats}
+          error={statsError}
+          loading={statsLoading}
+          maxRetries={3}
+          retryDelay={2000}
+          useFallbackDashboard={true}
+        >
+          <div className="space-y-6">
+            {/* Header */}
+            <div className="flex justify-between items-center">
+              <div>
+                <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
+                <p className="text-gray-600 mt-1">
+                  Welcome back! Here's what's happening with your campaigns.
+                  {stats?.lastUpdated && (
+                    <span className="text-sm text-gray-500 ml-2">
+                      Last updated: {new Date(stats.lastUpdated).toLocaleTimeString()}
+                    </span>
+                  )}
+                </p>
+              </div>
+              <div className="flex items-center space-x-3">
+                <button
+                  onClick={handleRefresh}
+                  disabled={statsLoading}
+                  className="inline-flex items-center px-3 py-2 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  title="Refresh dashboard"
+                >
+                  <RefreshCw className={`w-4 h-4 text-gray-500 ${statsLoading ? 'animate-spin' : ''}`} />
+                </button>
+                <div className="bg-white px-4 py-2 rounded-lg border border-gray-200">
+                  <div className="flex items-center space-x-2">
+                    <Calendar className="w-4 h-4 text-gray-500" />
+                    <span className="text-sm text-gray-600">
+                      {new Date().toLocaleDateString('en-IN', { 
+                        weekday: 'long', 
+                        year: 'numeric', 
+                        month: 'long', 
+                        day: 'numeric' 
+                      })}
+                    </span>
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
-        </div>
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {statCards.map((stat, index) => (
-            <motion.div
-              key={index}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: index * 0.1 }}
-              className="bg-white rounded-xl shadow-sm border border-gray-100 p-6"
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">{stat.title}</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{stat.value}</p>
-                </div>
-                <div className={`${stat.color} p-3 rounded-lg`}>
-                  <stat.icon className="w-6 h-6 text-white" />
-                </div>
-              </div>
-              <div className="flex items-center mt-4">
-                {stat.changeType === 'positive' ? (
-                  <ArrowUpRight className="w-4 h-4 text-green-500" />
-                ) : (
-                  <ArrowDownRight className="w-4 h-4 text-red-500" />
-                )}
-                <span className={`text-sm font-medium ml-1 ${
-                  stat.changeType === 'positive' ? 'text-green-600' : 'text-red-600'
-                }`}>
-                  {stat.change}
-                </span>
-                <span className="text-sm text-gray-500 ml-1">from last month</span>
-              </div>
-            </motion.div>
-          ))}
-        </div>
+            {/* Stats Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              {statCards.map((stat, index) => (
+                <motion.div
+                  key={index}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.5, delay: index * 0.1 }}
+                  className="bg-white rounded-xl shadow-sm border border-gray-100 p-6"
+                >
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-600">{stat.title}</p>
+                      <p className="text-2xl font-bold text-gray-900 mt-1">{stat.value}</p>
+                    </div>
+                    <div className={`${stat.color} p-3 rounded-lg`}>
+                      <stat.icon className="w-6 h-6 text-white" />
+                    </div>
+                  </div>
+                  <div className="flex items-center mt-4">
+                    {stat.changeType === 'positive' ? (
+                      <ArrowUpRight className="w-4 h-4 text-green-500" />
+                    ) : (
+                      <ArrowDownRight className="w-4 h-4 text-red-500" />
+                    )}
+                    <span className={`text-sm font-medium ml-1 ${
+                      stat.changeType === 'positive' ? 'text-green-600' : 'text-red-600'
+                    }`}>
+                      {stat.change}
+                    </span>
+                    <span className="text-sm text-gray-500 ml-1">
+                      {stat.title === 'Response Rate' ? '' : 'from last month'}
+                    </span>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
 
-        {/* Charts and Activity */}
-        <div className="grid lg:grid-cols-3 gap-6">
+            {/* Charts and Activity */}
+            <div className="grid lg:grid-cols-3 gap-6">
           {/* Campaign Performance Chart */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -275,15 +270,25 @@ export default function AdminDashboard() {
             </div>
             
             <div className="space-y-4">
-              {recentActivities.map((activity: any) => (
-                <div key={activity.id} className="flex items-start space-x-3">
-                  <div className="w-2 h-2 bg-primary-500 rounded-full mt-2"></div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900">{activity.title}</p>
-                    <p className="text-xs text-gray-500">{activity.time} • {activity.user}</p>
+              {recentActivities.length > 0 ? (
+                recentActivities.map((activity: any) => (
+                  <div key={activity.id} className="flex items-start space-x-3">
+                    <div className="w-2 h-2 bg-primary-500 rounded-full mt-2"></div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-900">{activity.title}</p>
+                      <p className="text-xs text-gray-500">{activity.time} • {activity.user}</p>
+                      {activity.description && (
+                        <p className="text-xs text-gray-400 mt-1">{activity.description}</p>
+                      )}
+                    </div>
                   </div>
+                ))
+              ) : (
+                <div className="text-center py-4">
+                  <Activity className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+                  <p className="text-sm text-gray-500">No recent activity</p>
                 </div>
-              ))}
+              )}
             </div>
             
             <button className="w-full mt-4 text-sm text-primary-600 hover:text-primary-700 font-medium">
@@ -292,13 +297,13 @@ export default function AdminDashboard() {
           </motion.div>
         </div>
 
-        {/* Quick Actions */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.6 }}
-          className="bg-white rounded-xl shadow-sm border border-gray-100 p-6"
-        >
+            {/* Quick Actions */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.6 }}
+              className="bg-white rounded-xl shadow-sm border border-gray-100 p-6"
+            >
           <h3 className="text-lg font-semibold text-gray-900 mb-6">Quick Actions</h3>
           
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -348,8 +353,10 @@ export default function AdminDashboard() {
               </button>
             )}
           </div>
-        </motion.div>
-      </div>
+            </motion.div>
+          </div>
+        </RetryableComponent>
+      </DashboardErrorBoundary>
     </AdminLayout>
   )
 }
