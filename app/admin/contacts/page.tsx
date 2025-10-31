@@ -21,9 +21,15 @@ import {
   CheckCircle,
   XCircle,
   Clock,
-  MoreVertical
+  MoreVertical,
+  Eye
 } from 'lucide-react'
 import AdminLayout from '../components/AdminLayout'
+import ContactForm from './components/ContactForm'
+import ContactDetailView from './components/ContactDetailView'
+import BulkOperationsPanel from './components/BulkOperationsPanel'
+import AdvancedSearchFilter from './components/AdvancedSearchFilter'
+import ImportExportModal from './components/ImportExportModal'
 import toast from 'react-hot-toast'
 import DataService, { Contact } from '../../../lib/dataService'
 
@@ -33,37 +39,22 @@ function ContactsPageContent() {
 
   const [filteredContacts, setFilteredContacts] = useState<Contact[]>([])
   const [searchTerm, setSearchTerm] = useState('')
-  const [statusFilter, setStatusFilter] = useState('ALL')
-  const [sourceFilter, setSourceFilter] = useState('ALL')
   const [selectedContacts, setSelectedContacts] = useState<string[]>([])
-  const [showBulkActions, setShowBulkActions] = useState(false)
+
+  // Form and detail view states
+  const [showContactForm, setShowContactForm] = useState(false)
+  const [editingContact, setEditingContact] = useState<Contact | null>(null)
+  const [showDetailView, setShowDetailView] = useState(false)
+  const [selectedContactId, setSelectedContactId] = useState<string | null>(null)
+  const [showImportExport, setShowImportExport] = useState(false)
 
   useEffect(() => {
     loadContacts()
   }, [])
 
   useEffect(() => {
-    let filtered = contacts
-
-    if (searchTerm) {
-      filtered = filtered.filter(contact => 
-        contact.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        contact.phone.includes(searchTerm) ||
-        contact.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        contact.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()))
-      )
-    }
-
-    if (statusFilter !== 'ALL') {
-      filtered = filtered.filter(contact => contact.status === statusFilter)
-    }
-
-    if (sourceFilter !== 'ALL') {
-      filtered = filtered.filter(contact => contact.source === sourceFilter)
-    }
-
-    setFilteredContacts(filtered)
-  }, [contacts, searchTerm, statusFilter, sourceFilter])
+    setFilteredContacts(contacts)
+  }, [contacts])
 
   const loadContacts = async () => {
     try {
@@ -162,6 +153,74 @@ function ContactsPageContent() {
     }
   }
 
+  const bulkDeleteContacts = async () => {
+    if (confirm(`Are you sure you want to delete ${selectedContacts.length} contacts? This action cannot be undone.`)) {
+      try {
+        await DataService.bulkDeleteContacts(selectedContacts)
+        setContacts(prev => prev.filter(contact => !selectedContacts.includes(contact.id)))
+        setSelectedContacts([])
+        toast.success(`${selectedContacts.length} contacts deleted`)
+      } catch (error) {
+        toast.error('Failed to delete contacts')
+      }
+    }
+  }
+
+  const handleAddContact = () => {
+    setEditingContact(null)
+    setShowContactForm(true)
+  }
+
+  const handleEditContact = (contact: Contact) => {
+    setEditingContact(contact)
+    setShowContactForm(true)
+  }
+
+  const handleViewContact = (contactId: string) => {
+    setSelectedContactId(contactId)
+    setShowDetailView(true)
+  }
+
+  const handleContactSaved = (savedContact: Contact) => {
+    if (editingContact) {
+      // Update existing contact
+      setContacts(prev => 
+        prev.map(contact => 
+          contact.id === savedContact.id ? savedContact : contact
+        )
+      )
+    } else {
+      // Add new contact
+      setContacts(prev => [savedContact, ...prev])
+    }
+    setShowContactForm(false)
+    setEditingContact(null)
+  }
+
+  const handleContactDeleted = (contactId: string) => {
+    setContacts(prev => prev.filter(contact => contact.id !== contactId))
+    toast.success('Contact deleted successfully')
+  }
+
+  const handleBulkOperationComplete = () => {
+    loadContacts() // Reload contacts after bulk operations
+  }
+
+  const handleFiltersChange = (filtered: Contact[]) => {
+    setFilteredContacts(filtered)
+    // Clear selection when filters change
+    setSelectedContacts([])
+  }
+
+  const handleSearchChange = (search: string) => {
+    setSearchTerm(search)
+  }
+
+  const handleImportComplete = () => {
+    loadContacts() // Reload contacts after import
+    setShowImportExport(false)
+  }
+
   const exportContacts = () => {
     const csvContent = [
       ['Name', 'Phone', 'Email', 'Tags', 'Source', 'Status', 'Created At'].join(','),
@@ -194,7 +253,7 @@ function ContactsPageContent() {
     avgResponseRate: Math.round(contacts.reduce((sum, c) => sum + c.responseRate, 0) / contacts.length)
   }
 
-  const sources = Array.from(new Set(contacts.map(c => c.source)))
+
 
   return (
     <AdminLayout>
@@ -209,13 +268,16 @@ function ContactsPageContent() {
           </div>
           <div className="flex items-center space-x-3">
             <button
-              onClick={exportContacts}
+              onClick={() => setShowImportExport(true)}
               className="btn-secondary flex items-center"
             >
-              <Download className="w-4 h-4 mr-2" />
-              Export
+              <Upload className="w-4 h-4 mr-2" />
+              Import/Export
             </button>
-            <button className="btn-primary flex items-center">
+            <button 
+              onClick={handleAddContact}
+              className="btn-primary flex items-center"
+            >
               <Plus className="w-5 h-5 mr-2" />
               Add Contact
             </button>
@@ -299,82 +361,17 @@ function ContactsPageContent() {
           </motion.div>
         </div>
 
-        {/* Filters and Search */}
+        {/* Advanced Search and Filters */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.5 }}
-          className="bg-white rounded-xl shadow-sm border border-gray-100 p-6"
         >
-          <div className="flex flex-col md:flex-row gap-4">
-            <div className="flex-1">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                <input
-                  type="text"
-                  placeholder="Search contacts by name, phone, email, or tags..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                />
-              </div>
-            </div>
-            
-            <div className="flex gap-3">
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="border border-gray-300 rounded-lg px-3 py-2 text-sm"
-              >
-                <option value="ALL">All Status</option>
-                <option value="ACTIVE">Active</option>
-                <option value="INACTIVE">Inactive</option>
-                <option value="BLOCKED">Blocked</option>
-              </select>
-              
-              <select
-                value={sourceFilter}
-                onChange={(e) => setSourceFilter(e.target.value)}
-                className="border border-gray-300 rounded-lg px-3 py-2 text-sm"
-              >
-                <option value="ALL">All Sources</option>
-                {sources.map(source => (
-                  <option key={source} value={source}>{source}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {/* Bulk Actions */}
-          {selectedContacts.length > 0 && (
-            <div className="mt-4 p-4 bg-primary-50 rounded-lg border border-primary-200">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-primary-700">
-                  {selectedContacts.length} contacts selected
-                </span>
-                <div className="flex items-center space-x-2">
-                  <button
-                    onClick={() => bulkUpdateStatus('ACTIVE')}
-                    className="text-sm bg-green-100 text-green-700 px-3 py-1 rounded-lg hover:bg-green-200"
-                  >
-                    Mark Active
-                  </button>
-                  <button
-                    onClick={() => bulkUpdateStatus('INACTIVE')}
-                    className="text-sm bg-yellow-100 text-yellow-700 px-3 py-1 rounded-lg hover:bg-yellow-200"
-                  >
-                    Mark Inactive
-                  </button>
-                  <button
-                    onClick={() => bulkUpdateStatus('BLOCKED')}
-                    className="text-sm bg-red-100 text-red-700 px-3 py-1 rounded-lg hover:bg-red-200"
-                  >
-                    Block
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
+          <AdvancedSearchFilter
+            contacts={contacts}
+            onFiltersChange={handleFiltersChange}
+            onSearchChange={handleSearchChange}
+          />
         </motion.div>
 
         {/* Contacts Table */}
@@ -512,18 +509,30 @@ function ContactsPageContent() {
                       
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <div className="flex items-center space-x-2">
-                          <button className="text-green-600 hover:text-green-900">
+                          <button 
+                            onClick={() => handleViewContact(contact.id)}
+                            className="text-blue-600 hover:text-blue-900"
+                            title="View Details"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+                          <button className="text-green-600 hover:text-green-900" title="Call">
                             <Phone className="w-4 h-4" />
                           </button>
-                          <button className="text-blue-600 hover:text-blue-900">
+                          <button className="text-purple-600 hover:text-purple-900" title="Message">
                             <MessageSquare className="w-4 h-4" />
                           </button>
-                          <button className="text-gray-600 hover:text-gray-900">
+                          <button 
+                            onClick={() => handleEditContact(contact)}
+                            className="text-gray-600 hover:text-gray-900"
+                            title="Edit"
+                          >
                             <Edit className="w-4 h-4" />
                           </button>
                           <button
                             onClick={() => deleteContact(contact.id)}
                             className="text-red-600 hover:text-red-900"
+                            title="Delete"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
@@ -543,6 +552,45 @@ function ContactsPageContent() {
             </div>
           )}
         </motion.div>
+
+        {/* Contact Form Modal */}
+        <ContactForm
+          contact={editingContact}
+          isOpen={showContactForm}
+          onClose={() => {
+            setShowContactForm(false)
+            setEditingContact(null)
+          }}
+          onSave={handleContactSaved}
+        />
+
+        {/* Contact Detail View Modal */}
+        <ContactDetailView
+          contactId={selectedContactId}
+          isOpen={showDetailView}
+          onClose={() => {
+            setShowDetailView(false)
+            setSelectedContactId(null)
+          }}
+          onEdit={handleEditContact}
+          onDelete={handleContactDeleted}
+        />
+
+        {/* Import/Export Modal */}
+        <ImportExportModal
+          isOpen={showImportExport}
+          onClose={() => setShowImportExport(false)}
+          onImportComplete={handleImportComplete}
+          contacts={filteredContacts}
+        />
+
+        {/* Bulk Operations Panel */}
+        <BulkOperationsPanel
+          selectedContacts={selectedContacts}
+          totalContacts={contacts.length}
+          onClearSelection={() => setSelectedContacts([])}
+          onContactsUpdated={handleBulkOperationComplete}
+        />
       </div>
     </AdminLayout>
   )

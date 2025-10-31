@@ -136,7 +136,13 @@ class DashboardStatsService {
             name: true,
             status: true,
             createdAt: true,
-            createdBy: true
+            createdBy: {
+              select: {
+                id: true,
+                name: true,
+                email: true
+              }
+            }
           }
         }),
         
@@ -253,7 +259,7 @@ class DashboardStatsService {
         title: `Campaign "${campaign.name}" ${campaign.status.toLowerCase()}`,
         description: `Status: ${campaign.status}`,
         time: this.getTimeAgo(campaign.createdAt),
-        user: campaign.createdBy || 'System',
+        user: campaign.createdBy?.name || 'System',
         metadata: {
           campaignId: campaign.id,
           status: campaign.status
@@ -294,7 +300,7 @@ class DashboardStatsService {
       // In a real system, you might track user sessions or recent activity
       const activeUsers = await prisma.user.count({
         where: {
-          status: 'ACTIVE'
+          isActive: true
         }
       })
       return activeUsers

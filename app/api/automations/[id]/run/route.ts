@@ -1,30 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getAutomationService } from '../../../../../lib/automationService'
+import { getAutomationEngine } from '../../../../../lib/automationEngine'
 
 export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    const automationService = getAutomationService()
-    const success = await automationService.executeAutomation(params.id)
+    const automationEngine = getAutomationEngine()
+    const executionId = await automationEngine.executeAutomation(params.id)
 
-    if (!success) {
-      return NextResponse.json(
-        { error: 'Failed to run automation' },
-        { status: 500 }
-      )
-    }
-
-    console.log(`✅ Successfully executed automation ${params.id}`)
+    console.log(`✅ Successfully started automation execution ${executionId} for automation ${params.id}`)
     return NextResponse.json({ 
       success: true, 
-      message: 'Automation executed successfully'
+      executionId,
+      message: 'Automation execution started'
     })
   } catch (error) {
     console.error('❌ Error running automation:', error)
     return NextResponse.json(
-      { error: 'Failed to run automation' },
+      { 
+        error: error instanceof Error ? error.message : 'Failed to run automation'
+      },
       { status: 500 }
     )
   }

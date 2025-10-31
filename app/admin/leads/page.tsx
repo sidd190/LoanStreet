@@ -40,6 +40,7 @@ import {
   Activity
 } from 'lucide-react'
 import AdminLayout from '../components/AdminLayout'
+import LeadDashboard from './components/LeadDashboard'
 import toast from 'react-hot-toast'
 import DataService, { Lead } from '../../../lib/dataService'
 
@@ -58,6 +59,7 @@ export default function LeadsPage() {
   const [showScoreInsights, setShowScoreInsights] = useState(false)
   const [bulkSelectedLeads, setBulkSelectedLeads] = useState<string[]>([])
   const [showBulkActions, setShowBulkActions] = useState(false)
+  const [showAnalytics, setShowAnalytics] = useState(false)
 
   useEffect(() => {
     loadLeads()
@@ -335,6 +337,14 @@ ${filteredLeads.map(lead =>
             </button>
             
             <button
+              onClick={() => setShowAnalytics(!showAnalytics)}
+              className="btn-secondary flex items-center"
+            >
+              <Activity className="w-4 h-4 mr-2" />
+              Analytics
+            </button>
+            
+            <button
               onClick={() => setShowLeadModal(true)}
               className="btn-primary flex items-center"
             >
@@ -343,6 +353,17 @@ ${filteredLeads.map(lead =>
             </button>
           </div>
         </div>
+
+        {/* Lead Analytics Dashboard */}
+        {showAnalytics && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-6"
+          >
+            <LeadDashboard onRefresh={loadLeads} />
+          </motion.div>
+        )}
 
         {/* Enhanced Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-6 gap-6">

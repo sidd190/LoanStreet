@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getAutomationEngine } from '../../../lib/automationEngine'
 import { getAutomationService } from '../../../lib/automationService'
 
 export async function GET(request: NextRequest) {
@@ -26,18 +27,22 @@ export async function POST(request: NextRequest) {
   try {
     const data = await request.json()
     
-    const automationService = getAutomationService()
-    const automationId = await automationService.createAutomation({
+    // Use the new automation engine for enhanced functionality
+    const automationEngine = getAutomationEngine()
+    
+    const automationId = await automationEngine.createAutomation({
       name: data.name,
       description: data.description,
-      type: data.type,
-      status: data.status || 'draft',
-      schedule: data.schedule,
-      conditions: data.conditions,
-      actions: data.actions
+      isActive: data.status === 'active',
+      trigger: data.trigger || {
+        type: 'time',
+        config: data.schedule || { frequency: 'daily', time: '09:00' }
+      },
+      conditions: data.conditions || [],
+      actions: data.actions || []
     })
 
-    console.log('✅ Successfully created automation in service')
+    console.log('✅ Successfully created automation with new engine')
     return NextResponse.json({ id: automationId, success: true })
   } catch (error) {
     console.error('❌ Error creating automation:', error)

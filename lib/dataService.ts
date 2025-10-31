@@ -243,6 +243,29 @@ export class DataService {
     )
   }
 
+  static async createContact(contact: Omit<Contact, 'id' | 'createdAt' | 'updatedAt'>): Promise<Contact> {
+    return tryApiThenFallback(
+      async () => {
+        const response = await fetch(`${API_BASE_URL}/contacts`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify(contact)
+        })
+        if (!response.ok) throw new Error(`HTTP ${response.status}`)
+        const data = await response.json()
+        return data.success ? data.contact : data
+      },
+      {
+        ...contact,
+        id: Date.now().toString(),
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      } as Contact,
+      'contact creation'
+    )
+  }
+
   static async deleteContact(id: string): Promise<boolean> {
     return tryApiThenFallback(
       async () => {
@@ -270,6 +293,65 @@ export class DataService {
       },
       true,
       `bulk contact update (${ids.length} contacts)`
+    )
+  }
+
+  static async bulkDeleteContacts(ids: string[]): Promise<boolean> {
+    return tryApiThenFallback(
+      async () => {
+        const response = await fetch(`${API_BASE_URL}/contacts/bulk`, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ids })
+        })
+        if (!response.ok) throw new Error(`HTTP ${response.status}`)
+        return true
+      },
+      true,
+      `bulk contact deletion (${ids.length} contacts)`
+    )
+  }
+
+  static async importContacts(file: File): Promise<{ success: boolean; imported: number; errors: string[] }> {
+    return tryApiThenFallback(
+      async () => {
+        const formData = new FormData()
+        formData.append('file', file)
+        
+        const response = await fetch(`${API_BASE_URL}/contacts/import`, {
+          method: 'POST',
+          credentials: 'include',
+          body: formData
+        })
+        if (!response.ok) throw new Error(`HTTP ${response.status}`)
+        const data = await response.json()
+        return data.success ? data : data
+      },
+      { success: true, imported: 0, errors: ['Import functionality not available in offline mode'] },
+      'contact import'
+    )
+  }
+
+  static async exportContacts(filters?: any): Promise<Blob> {
+    return tryApiThenFallback(
+      async () => {
+        const params = new URLSearchParams()
+        if (filters) {
+          Object.keys(filters).forEach(key => {
+            if (filters[key] !== undefined && filters[key] !== null) {
+              params.append(key, filters[key])
+            }
+          })
+        }
+        
+        const response = await fetch(`${API_BASE_URL}/contacts/export?${params}`, {
+          credentials: 'include'
+        })
+        if (!response.ok) throw new Error(`HTTP ${response.status}`)
+        return response.blob()
+      },
+      new Blob(['Name,Phone,Email,Tags,Source,Status,Created At\n'], { type: 'text/csv' }),
+      'contact export'
     )
   }
 

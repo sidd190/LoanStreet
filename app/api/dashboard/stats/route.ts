@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { verifyToken } from '@/lib/auth'
+import { verifyAuth } from '@/lib/auth'
 import dashboardStatsService from '@/lib/dashboardStatsService'
 import Logger, { DataSource } from '@/lib/logger'
 
@@ -7,30 +7,23 @@ export async function GET(request: NextRequest) {
   const startTime = Date.now()
   
   try {
-    // Get user from token
-    const token = request.cookies.get('auth-token')?.value
-    if (!token) {
-      Logger.warn(DataSource.API, 'dashboard_stats', 'Authentication required - no token provided')
+    // Verify authentication
+    const authResult = await verifyAuth(request)
+    if (!authResult.success) {
+      Logger.warn(DataSource.API, 'dashboard_stats', 'Authentication failed', authResult.error)
       return NextResponse.json(
-        { success: false, message: 'Authentication required' },
+        { success: false, message: authResult.error },
         { status: 401 }
       )
     }
 
-    const payload = await verifyToken(token)
-    if (!payload) {
-      Logger.warn(DataSource.API, 'dashboard_stats', 'Invalid token provided')
-      return NextResponse.json(
-        { success: false, message: 'Invalid token' },
-        { status: 401 }
-      )
-    }
+    const user = authResult.user!
 
     // Check for cache control headers
     const cacheControl = request.headers.get('cache-control')
     const forceRefresh = cacheControl === 'no-cache' || request.nextUrl.searchParams.get('refresh') === 'true'
 
-    Logger.info(DataSource.API, 'dashboard_stats', `Fetching dashboard stats for user ${payload.userId}${forceRefresh ? ' (force refresh)' : ''}`)
+    Logger.info(DataSource.API, 'dashboard_stats', `Fetching dashboard stats for user ${user.id}${forceRefresh ? ' (force refresh)' : ''}`)
 
     // Get dashboard statistics using the service
     const stats = await dashboardStatsService.getStats(!forceRefresh)

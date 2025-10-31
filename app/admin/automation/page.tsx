@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import RouteProtection from '../../components/RouteProtection'
 import { 
   Calendar, 
@@ -18,11 +18,16 @@ import {
   Trash2,
   CheckCircle,
   AlertCircle,
-  RefreshCw
+  RefreshCw,
+  Activity,
+  Eye,
+  Zap
 } from 'lucide-react'
 import AdminLayout from '../components/AdminLayout'
 import toast from 'react-hot-toast'
 import DataService, { AutomationRule } from '../../../lib/dataService'
+import AutomationRuleBuilder, { AutomationWorkflow } from './components/AutomationRuleBuilder'
+import AutomationMonitoring from './components/AutomationMonitoring'
 
 function AutomationPageContent() {
   const [automations, setAutomations] = useState<AutomationRule[]>([])
@@ -31,10 +36,29 @@ function AutomationPageContent() {
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [selectedAutomation, setSelectedAutomation] = useState<AutomationRule | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+  const [showRuleBuilder, setShowRuleBuilder] = useState(false)
+  const [editingWorkflow, setEditingWorkflow] = useState<AutomationWorkflow | null>(null)
+  const [executions, setExecutions] = useState<any[]>([])
+  const [showExecutions, setShowExecutions] = useState(false)
+  const [showMonitoring, setShowMonitoring] = useState(false)
+  const [monitoringAutomationId, setMonitoringAutomationId] = useState<string | null>(null)
 
   useEffect(() => {
     loadAutomations()
+    loadExecutions()
   }, [])
+
+  const loadExecutions = async () => {
+    try {
+      const response = await fetch('/api/automations/executions')
+      const data = await response.json()
+      if (data.success) {
+        setExecutions(data.executions)
+      }
+    } catch (error) {
+      console.error('Failed to load executions:', error)
+    }
+  }
 
   const loadAutomations = async () => {
     try {
@@ -115,30 +139,83 @@ function AutomationPageContent() {
   const runAutomationNow = async (id: string) => {
     setIsLoading(true)
     try {
-      await DataService.runAutomation(id)
+      const response = await fetch(`/api/automations/${id}/execute`, {
+        method: 'POST'
+      })
       
-      setAutomations(prev => 
-        prev.map(automation => 
-          automation.id === id 
-            ? { 
-                ...automation, 
-                stats: {
-                  ...automation.stats,
-                  totalRuns: automation.stats.totalRuns + 1,
-                  successfulRuns: automation.stats.successfulRuns + 1,
-                  lastRun: new Date().toISOString()
-                }
-              }
-            : automation
-        )
-      )
+      const data = await response.json()
       
-      toast.success('Automation executed successfully')
+      if (data.success) {
+        toast.success(`Automation execution started (ID: ${data.executionId})`)
+        loadExecutions() // Refresh executions list
+        loadAutomations() // Refresh automations to update stats
+      } else {
+        throw new Error(data.error || 'Failed to execute automation')
+      }
     } catch (error) {
-      toast.error('Failed to run automation')
+      toast.error(error instanceof Error ? error.message : 'Failed to run automation')
     } finally {
       setIsLoading(false)
     }
+  }
+
+  const handleSaveWorkflow = async (workflow: AutomationWorkflow) => {
+    setIsLoading(true)
+    try {
+      const response = await fetch('/api/automations', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          name: workflow.name,
+          description: workflow.description,
+          status: workflow.isActive ? 'active' : 'draft',
+          trigger: workflow.trigger,
+          conditions: workflow.conditions,
+          actions: workflow.actions
+        })
+      })
+
+      const data = await response.json()
+      
+      if (data.success) {
+        toast.success('Automation rule saved successfully')
+        setShowRuleBuilder(false)
+        setEditingWorkflow(null)
+        loadAutomations()
+      } else {
+        throw new Error(data.error || 'Failed to save automation')
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to save automation')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handlePreviewWorkflow = (workflow: AutomationWorkflow) => {
+    // Preview functionality - could show a modal with workflow visualization
+    console.log('Preview workflow:', workflow)
+  }
+
+  const editAutomation = (automation: AutomationRule) => {
+    // Convert AutomationRule to AutomationWorkflow format
+    const workflow: AutomationWorkflow = {
+      id: automation.id,
+      name: automation.name,
+      description: automation.description,
+      trigger: {
+        type: 'time', // Default, should be parsed from automation.schedule
+        config: automation.schedule
+      },
+      conditions: [], // Should be parsed from automation conditions
+      actions: [], // Should be parsed from automation actions
+      isActive: automation.status === 'active'
+    }
+    
+    setEditingWorkflow(workflow)
+    setShowRuleBuilder(true)
   }
 
   const formatNextRun = (nextRun: string) => {
@@ -169,13 +246,29 @@ function AutomationPageContent() {
               Automate your marketing campaigns, follow-ups, and data processing tasks
             </p>
           </div>
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="btn-primary flex items-center"
-          >
-            <Plus className="w-5 h-5 mr-2" />
-            Create Automation
-          </button>
+          <div className="flex items-center space-x-3">
+            <button
+              onClick={() => setShowExecutions(!showExecutions)}
+              className="btn-secondary flex items-center"
+            >
+              <Activity className="w-5 h-5 mr-2" />
+              {showExecutions ? 'Hide' : 'Show'} Executions
+            </button>
+            <button
+              onClick={() => setShowMonitoring(true)}
+              className="btn-secondary flex items-center"
+            >
+              <BarChart3 className="w-5 h-5 mr-2" />
+              Monitoring
+            </button>
+            <button
+              onClick={() => setShowRuleBuilder(true)}
+              className="btn-primary flex items-center"
+            >
+              <Plus className="w-5 h-5 mr-2" />
+              Create Automation
+            </button>
+          </div>
         </div>
 
         {/* Stats Overview */}
@@ -351,6 +444,17 @@ function AutomationPageContent() {
                       >
                         <Play className="w-5 h-5" />
                       </button>
+
+                      <button
+                        onClick={() => {
+                          setMonitoringAutomationId(automation.id)
+                          setShowMonitoring(true)
+                        }}
+                        className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
+                        title="View Monitoring"
+                      >
+                        <BarChart3 className="w-5 h-5" />
+                      </button>
                       
                       <button
                         onClick={() => toggleAutomationStatus(automation.id, automation.status)}
@@ -370,7 +474,7 @@ function AutomationPageContent() {
                       </button>
                       
                       <button
-                        onClick={() => setSelectedAutomation(automation)}
+                        onClick={() => editAutomation(automation)}
                         className="p-2 text-gray-600 hover:bg-gray-50 rounded-lg transition-colors"
                         title="Edit"
                       >
@@ -393,6 +497,79 @@ function AutomationPageContent() {
           </div>
         </motion.div>
 
+        {/* Executions Panel */}
+        <AnimatePresence>
+          {showExecutions && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="bg-white rounded-xl shadow-sm border border-gray-100"
+            >
+              <div className="p-6 border-b border-gray-200">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-xl font-semibold text-gray-900">Recent Executions</h2>
+                  <button
+                    onClick={loadExecutions}
+                    className="p-2 text-gray-600 hover:bg-gray-50 rounded-lg transition-colors"
+                  >
+                    <RefreshCw className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="divide-y divide-gray-200">
+                {executions.length === 0 ? (
+                  <div className="p-6 text-center text-gray-500">
+                    No recent executions
+                  </div>
+                ) : (
+                  executions.map((execution, index) => (
+                    <div key={execution.id} className="p-6">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-4">
+                          <div className={`w-3 h-3 rounded-full ${
+                            execution.status === 'COMPLETED' ? 'bg-green-500' :
+                            execution.status === 'RUNNING' ? 'bg-blue-500' :
+                            execution.status === 'FAILED' ? 'bg-red-500' :
+                            'bg-yellow-500'
+                          }`} />
+                          <div>
+                            <p className="font-medium text-gray-900">
+                              Execution {execution.id}
+                            </p>
+                            <p className="text-sm text-gray-600">
+                              {execution.status} • {execution.successCount}/{execution.targetCount} successful
+                            </p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm text-gray-600">
+                            {new Date(execution.startedAt).toLocaleString()}
+                          </p>
+                          {execution.completedAt && (
+                            <p className="text-xs text-gray-500">
+                              Duration: {Math.round((new Date(execution.completedAt).getTime() - new Date(execution.startedAt).getTime()) / 1000)}s
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      
+                      {execution.errors.length > 0 && (
+                        <div className="mt-3 p-3 bg-red-50 rounded-lg">
+                          <p className="text-sm text-red-800">
+                            {execution.errors.length} error(s) occurred
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* Quick Templates */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -403,7 +580,33 @@ function AutomationPageContent() {
           <h2 className="text-xl font-semibold text-gray-900 mb-6">Quick Templates</h2>
           
           <div className="grid md:grid-cols-3 gap-4">
-            <div className="border border-gray-200 rounded-lg p-4 hover:border-primary-300 cursor-pointer transition-colors">
+            <div 
+              onClick={() => {
+                const welcomeWorkflow: AutomationWorkflow = {
+                  id: '',
+                  name: 'Welcome Series',
+                  description: 'Automated welcome messages for new leads',
+                  trigger: {
+                    type: 'event',
+                    config: { event: 'new_lead' }
+                  },
+                  conditions: [],
+                  actions: [
+                    {
+                      type: 'send_message',
+                      config: {
+                        messageTemplate: 'Hi {name}, welcome! Thank you for your interest in our {loanType} loan.',
+                        messageType: 'WHATSAPP'
+                      }
+                    }
+                  ],
+                  isActive: false
+                }
+                setEditingWorkflow(welcomeWorkflow)
+                setShowRuleBuilder(true)
+              }}
+              className="border border-gray-200 rounded-lg p-4 hover:border-primary-300 cursor-pointer transition-colors"
+            >
               <div className="flex items-center mb-3">
                 <MessageSquare className="w-6 h-6 text-blue-600 mr-2" />
                 <h3 className="font-medium">Welcome Series</h3>
@@ -416,7 +619,39 @@ function AutomationPageContent() {
               </button>
             </div>
             
-            <div className="border border-gray-200 rounded-lg p-4 hover:border-primary-300 cursor-pointer transition-colors">
+            <div 
+              onClick={() => {
+                const reengagementWorkflow: AutomationWorkflow = {
+                  id: '',
+                  name: 'Re-engagement Campaign',
+                  description: 'Win back inactive leads',
+                  trigger: {
+                    type: 'time',
+                    config: { frequency: 'weekly', time: '10:00' }
+                  },
+                  conditions: [
+                    {
+                      field: 'lastContact',
+                      operator: 'less_than',
+                      value: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+                    }
+                  ],
+                  actions: [
+                    {
+                      type: 'send_message',
+                      config: {
+                        messageTemplate: 'Hi {name}, we noticed you haven\'t been in touch. Let us help you with your {loanType} loan!',
+                        messageType: 'WHATSAPP'
+                      }
+                    }
+                  ],
+                  isActive: false
+                }
+                setEditingWorkflow(reengagementWorkflow)
+                setShowRuleBuilder(true)
+              }}
+              className="border border-gray-200 rounded-lg p-4 hover:border-primary-300 cursor-pointer transition-colors"
+            >
               <div className="flex items-center mb-3">
                 <Target className="w-6 h-6 text-green-600 mr-2" />
                 <h3 className="font-medium">Re-engagement Campaign</h3>
@@ -429,7 +664,38 @@ function AutomationPageContent() {
               </button>
             </div>
             
-            <div className="border border-gray-200 rounded-lg p-4 hover:border-primary-300 cursor-pointer transition-colors">
+            <div 
+              onClick={() => {
+                const leadScoringWorkflow: AutomationWorkflow = {
+                  id: '',
+                  name: 'Lead Scoring Automation',
+                  description: 'Automatically score and prioritize leads',
+                  trigger: {
+                    type: 'event',
+                    config: { event: 'message_received' }
+                  },
+                  conditions: [],
+                  actions: [
+                    {
+                      type: 'update_tags',
+                      config: {
+                        tags: ['engaged', 'high-priority']
+                      }
+                    },
+                    {
+                      type: 'update_lead_status',
+                      config: {
+                        newStatus: 'QUALIFIED'
+                      }
+                    }
+                  ],
+                  isActive: false
+                }
+                setEditingWorkflow(leadScoringWorkflow)
+                setShowRuleBuilder(true)
+              }}
+              className="border border-gray-200 rounded-lg p-4 hover:border-primary-300 cursor-pointer transition-colors"
+            >
               <div className="flex items-center mb-3">
                 <BarChart3 className="w-6 h-6 text-purple-600 mr-2" />
                 <h3 className="font-medium">Lead Scoring</h3>
@@ -443,6 +709,62 @@ function AutomationPageContent() {
             </div>
           </div>
         </motion.div>
+
+        {/* Automation Rule Builder Modal */}
+        <AnimatePresence>
+          {showRuleBuilder && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+            >
+              <motion.div
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+                className="w-full max-w-7xl max-h-[95vh] overflow-y-auto"
+              >
+                <AutomationRuleBuilder
+                  workflow={editingWorkflow || undefined}
+                  onSave={handleSaveWorkflow}
+                  onCancel={() => {
+                    setShowRuleBuilder(false)
+                    setEditingWorkflow(null)
+                  }}
+                  onPreview={handlePreviewWorkflow}
+                />
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Automation Monitoring Modal */}
+        <AnimatePresence>
+          {showMonitoring && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+            >
+              <motion.div
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+                className="w-full max-w-7xl max-h-[95vh] overflow-y-auto bg-white rounded-xl"
+              >
+                <AutomationMonitoring
+                  automationId={monitoringAutomationId || undefined}
+                  onClose={() => {
+                    setShowMonitoring(false)
+                    setMonitoringAutomationId(null)
+                  }}
+                />
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </AdminLayout>
   )

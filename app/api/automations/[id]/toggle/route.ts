@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getAutomationService } from '../../../../../lib/automationService'
+import { getAutomationEngine } from '../../../../../lib/automationEngine'
 
 export async function POST(
   request: NextRequest,
@@ -8,8 +8,8 @@ export async function POST(
   try {
     const { isActive } = await request.json()
     
-    const automationService = getAutomationService()
-    const success = await automationService.toggleAutomation(params.id, isActive)
+    const automationEngine = getAutomationEngine()
+    const success = await automationEngine.toggleAutomation(params.id, isActive)
 
     if (!success) {
       return NextResponse.json(
