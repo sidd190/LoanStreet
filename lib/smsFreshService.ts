@@ -510,4 +510,16 @@ class SMSFreshService {
 
 // Export singleton instance
 export const smsFreshService = new SMSFreshService()
+
+// Factory function for creating service instance (for compatibility)
+export function createSMSFreshService() {
+  return smsFreshService
+}
+
+// Fallback SMS service (for compatibility)
+export function createFallbackSMSService() {
+  return smsFreshService
+}
+
+// Default export
 export default smsFreshService

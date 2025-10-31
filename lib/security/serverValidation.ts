@@ -1,135 +1,148 @@
-import { z } from 'zod'
+// Server-side validation utilities
 
-/**
- * Server-side validation utilities that work in Edge Runtime
- */
-
-// Re-export common schemas
-export const phoneNumberSchema = z.string()
-  .regex(/^[6-9]\d{9}$/, 'Phone number must be a valid 10-digit Indian mobile number')
-
-export const emailSchema = z.string()
-  .email('Invalid email format')
-  .max(254, 'Email too long')
-
-export const nameSchema = z.string()
-  .min(1, 'Name is required')
-  .max(100, 'Name too long')
-  .regex(/^[a-zA-Z\s\-'\.]+$/, 'Name contains invalid characters')
-
-export const passwordSchema = z.string()
-  .min(8, 'Password must be at least 8 characters')
-  .max(128, 'Password too long')
-  .regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*(),.?":{}|<>])/, 
-    'Password must contain uppercase, lowercase, number, and special character')
-
-export const loginSchema = z.object({
-  email: emailSchema,
-  password: z.string().min(1, 'Password required'),
-})
-
-/**
- * Simple server-side HTML sanitization
- */
-export function sanitizeHtml(input: string): string {
-  if (typeof input !== 'string') return ''
-  
-  return input
-    .replace(/<script[^>]*>.*?<\/script>/gi, '')
-    .replace(/<[^>]*>/g, '')
-    .replace(/javascript:/gi, '')
-    .replace(/on\w+\s*=/gi, '')
-    .trim()
-}
-
-/**
- * Sanitize and validate text input
- */
-export function sanitizeText(input: string, maxLength: number = 1000): string {
-  if (typeof input !== 'string') {
-    throw new Error('Input must be a string')
-  }
-  
-  // Remove HTML tags and sanitize
-  const sanitized = sanitizeHtml(input)
-  
-  // Trim whitespace
-  const trimmed = sanitized.trim()
-  
-  // Check length
-  if (trimmed.length > maxLength) {
-    throw new Error(`Input exceeds maximum length of ${maxLength} characters`)
-  }
-  
-  return trimmed
-}
-
-/**
- * Validate pagination parameters
- */
-export function validatePagination(limit?: string, offset?: string): {
-  limit: number
-  offset: number
+export interface ValidationResult {
+  valid: boolean
   errors: string[]
-} {
+}
+
+// Validate email format
+export function validateEmail(email: string): ValidationResult {
   const errors: string[] = []
-  let validatedLimit = 50 // default
-  let validatedOffset = 0 // default
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
   
-  if (limit) {
-    const parsedLimit = parseInt(limit, 10)
-    if (isNaN(parsedLimit) || parsedLimit < 1) {
-      errors.push('Limit must be a positive number')
-    } else if (parsedLimit > 100) {
-      errors.push('Limit cannot exceed 100')
-    } else {
-      validatedLimit = parsedLimit
-    }
-  }
-  
-  if (offset) {
-    const parsedOffset = parseInt(offset, 10)
-    if (isNaN(parsedOffset) || parsedOffset < 0) {
-      errors.push('Offset must be a non-negative number')
-    } else {
-      validatedOffset = parsedOffset
-    }
+  if (!email) {
+    errors.push('Email is required')
+  } else if (!emailRegex.test(email)) {
+    errors.push('Invalid email format')
   }
   
   return {
-    limit: validatedLimit,
-    offset: validatedOffset,
+    valid: errors.length === 0,
     errors
   }
 }
 
-/**
- * Generic validation function using Zod schemas
- */
-export function validateInput<T>(schema: z.ZodSchema<T>, data: unknown): {
-  success: boolean
-  data?: T
-  errors: string[]
-} {
-  try {
-    const result = schema.safeParse(data)
-    
-    if (result.success) {
-      return {
-        success: true,
-        data: result.data,
-        errors: []
-      }
-    } else {
-      return {
-        success: false,
-        errors: result.error.errors.map(err => `${err.path.join('.')}: ${err.message}`)
-      }
+// Validate phone number
+export function validatePhone(phone: string): ValidationResult {
+  const errors: string[] = []
+  const phoneRegex = /^[0-9]{10}$/
+  
+  if (!phone) {
+    errors.push('Phone number is required')
+  } else if (!phoneRegex.test(phone.replace(/\D/g, ''))) {
+    errors.push('Invalid phone number format')
+  }
+  
+  return {
+    valid: errors.length === 0,
+    errors
+  }
+}
+
+// Validate required fields
+export function validateRequired(fields: Record<string, any>): ValidationResult {
+  const errors: string[] = []
+  
+  Object.entries(fields).forEach(([key, value]) => {
+    if (!value || (typeof value === 'string' && value.trim() === '')) {
+      errors.push(`${key} is required`)
     }
-  } catch (error) {
-    return {
-      success: false,
-      errors: ['Validation error occurred']
+  })
+  
+  return {
+    valid: errors.length === 0,
+    errors
+  }
+}
+
+// Validate string length
+export function validateLength(
+  value: string,
+  min: number,
+  max: number,
+  fieldName: string = 'Field'
+): ValidationResult {
+  const errors: string[] = []
+  
+  if (value.length < min) {
+    errors.push(`${fieldName} must be at least ${min} characters`)
+  }
+  if (value.length > max) {
+    errors.push(`${fieldName} must be at most ${max} characters`)
+  }
+  
+  return {
+    valid: errors.length === 0,
+    errors
+  }
+}
+
+// Validate pagination parameters
+export function validatePagination(page?: number, limit?: number): ValidationResult {
+  const errors: string[] = []
+  
+  if (page !== undefined && (page < 1 || !Number.isInteger(page))) {
+    errors.push('Page must be a positive integer')
+  }
+  
+  if (limit !== undefined && (limit < 1 || limit > 100 || !Number.isInteger(limit))) {
+    errors.push('Limit must be between 1 and 100')
+  }
+  
+  return {
+    valid: errors.length === 0,
+    errors
+  }
+}
+
+// Validate date range
+export function validateDateRange(startDate?: string, endDate?: string): ValidationResult {
+  const errors: string[] = []
+  
+  if (startDate && isNaN(Date.parse(startDate))) {
+    errors.push('Invalid start date format')
+  }
+  
+  if (endDate && isNaN(Date.parse(endDate))) {
+    errors.push('Invalid end date format')
+  }
+  
+  if (startDate && endDate && new Date(startDate) > new Date(endDate)) {
+    errors.push('Start date must be before end date')
+  }
+  
+  return {
+    valid: errors.length === 0,
+    errors
+  }
+}
+
+// Sanitize string input
+export function sanitizeString(input: string): string {
+  return input.trim().replace(/[<>]/g, '')
+}
+
+// Validate and sanitize contact data
+export function validateContactData(data: any): ValidationResult {
+  const errors: string[] = []
+  
+  if (!data.name || typeof data.name !== 'string') {
+    errors.push('Valid name is required')
+  }
+  
+  if (!data.phone || typeof data.phone !== 'string') {
+    errors.push('Valid phone number is required')
+  }
+  
+  if (data.email) {
+    const emailValidation = validateEmail(data.email)
+    if (!emailValidation.valid) {
+      errors.push(...emailValidation.errors)
     }
+  }
+  
+  return {
+    valid: errors.length === 0,
+    errors
   }
 }

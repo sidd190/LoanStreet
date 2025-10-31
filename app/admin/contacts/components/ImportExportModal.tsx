@@ -96,7 +96,7 @@ export default function ImportExportModal({
     setLoading(true)
     try {
       const result = await DataService.importContacts(selectedFile)
-      setImportResult(result)
+      setImportResult({ ...result, duplicates: 0 })
       
       if (result.success) {
         toast.success(`Successfully imported ${result.imported} contacts`)

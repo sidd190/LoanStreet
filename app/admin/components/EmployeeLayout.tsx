@@ -18,7 +18,6 @@ import {
 } from 'lucide-react'
 import Link from 'next/link'
 import { AuthUser } from '@/lib/auth'
-import { validateRoutePermissions } from '@/lib/permissions'
 
 interface EmployeeLayoutProps {
   children: React.ReactNode
@@ -35,40 +34,18 @@ export default function EmployeeLayout({ children }: EmployeeLayoutProps) {
   useEffect(() => {
     checkAuthentication()
     loadActionLogs()
-  }, [router, pathname])
+  }, [])
 
   const checkAuthentication = async () => {
     try {
-      const token = localStorage.getItem('adminToken')
-      if (!token) {
-        router.push('/admin')
-        return
-      }
-
-      // Fetch user profile to get current permissions
-      const response = await fetch('/api/auth/profile', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+      const response = await fetch('/api/auth/me', {
+        credentials: 'include'
       })
 
       if (response.ok) {
         const data = await response.json()
-        if (data.success) {
+        if (data.success && data.user) {
           setUser(data.user)
-          
-          // Ensure user is employee
-          if (data.user.role !== 'EMPLOYEE') {
-            router.push('/admin/dashboard')
-            return
-          }
-          
-          // Validate route permissions
-          const routeValidation = validateRoutePermissions(data.user, pathname)
-          if (!routeValidation.allowed && routeValidation.redirectTo) {
-            router.push(routeValidation.redirectTo)
-            return
-          }
         } else {
           throw new Error('Invalid token')
         }
@@ -77,9 +54,7 @@ export default function EmployeeLayout({ children }: EmployeeLayoutProps) {
       }
     } catch (error) {
       console.error('Authentication check failed:', error)
-      localStorage.removeItem('adminToken')
-      localStorage.removeItem('userRole')
-      router.push('/admin')
+      setUser(null)
     } finally {
       setLoading(false)
     }
@@ -87,13 +62,8 @@ export default function EmployeeLayout({ children }: EmployeeLayoutProps) {
 
   const loadActionLogs = async () => {
     try {
-      const token = localStorage.getItem('adminToken')
-      if (!token) return
-
       const response = await fetch('/api/employee/action-logs', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+        credentials: 'include'
       })
 
       if (response.ok) {
@@ -109,15 +79,12 @@ export default function EmployeeLayout({ children }: EmployeeLayoutProps) {
 
   const logAction = async (action: string, details: any = {}) => {
     try {
-      const token = localStorage.getItem('adminToken')
-      if (!token) return
-
       await fetch('/api/employee/log-action', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
+        credentials: 'include',
         body: JSON.stringify({
           action,
           details,
@@ -135,13 +102,14 @@ export default function EmployeeLayout({ children }: EmployeeLayoutProps) {
   const handleLogout = async () => {
     try {
       await logAction('logout', { timestamp: new Date().toISOString() })
-      await fetch('/api/auth/logout', { method: 'POST' })
+      await fetch('/api/auth/logout', { 
+        method: 'POST',
+        credentials: 'include'
+      })
+      setUser(null)
+      window.location.href = '/admin'
     } catch (error) {
       console.error('Logout error:', error)
-    } finally {
-      localStorage.removeItem('adminToken')
-      localStorage.removeItem('userRole')
-      router.push('/admin')
     }
   }
 
@@ -173,7 +141,20 @@ export default function EmployeeLayout({ children }: EmployeeLayoutProps) {
   }
 
   if (!user || user.role !== 'EMPLOYEE') {
-    return null
+    if (pathname === '/admin') {
+      return null
+    }
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold text-gray-900 mb-4">Authentication Required</h2>
+          <p className="text-gray-600 mb-6">Please log in as an employee to access this page.</p>
+          <Link href="/admin" className="inline-block bg-primary-600 text-white px-6 py-3 rounded-lg hover:bg-primary-700 transition-colors">
+            Go to Login
+          </Link>
+        </div>
+      </div>
+    )
   }
 
   return (

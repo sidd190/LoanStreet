@@ -37,7 +37,8 @@ export default function AdminLogin() {
 
       if (response.ok) {
         toast.success('Login successful!')
-        router.push('/admin/dashboard')
+        // Reload the page to update auth state without redirecting
+        window.location.reload()
       } else {
         toast.error(data.message || 'Login failed')
       }

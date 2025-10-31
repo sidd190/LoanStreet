@@ -18,7 +18,6 @@ interface LoginCredentials {
 interface UseAuthReturn extends AuthState {
   login: (credentials: LoginCredentials) => Promise<boolean>
   logout: () => Promise<void>
-  refreshToken: () => Promise<boolean>
   checkAuth: () => Promise<void>
 }
 
@@ -52,16 +51,13 @@ export function useAuth(): UseAuthReturn {
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'include',
         body: JSON.stringify(credentials),
       })
 
       const data = await response.json()
 
       if (data.success) {
-        // Store token in localStorage
-        localStorage.setItem('adminToken', data.token)
-        localStorage.setItem('userRole', data.user.role)
-        
         setUser(data.user)
         return true
       } else {
@@ -77,55 +73,22 @@ export function useAuth(): UseAuthReturn {
 
   const logout = useCallback(async (): Promise<void> => {
     try {
-      // Call logout endpoint to clear server-side session
-      await fetch('/api/auth/logout', { method: 'POST' })
+      await fetch('/api/auth/logout', { 
+        method: 'POST',
+        credentials: 'include'
+      })
     } catch (error) {
       console.error('Logout error:', error)
     } finally {
-      // Clear local storage
-      localStorage.removeItem('adminToken')
-      localStorage.removeItem('userRole')
-      
       setUser(null)
       router.push('/admin')
     }
   }, [setUser, router])
 
-  const refreshToken = useCallback(async (): Promise<boolean> => {
-    try {
-      const response = await fetch('/api/auth/refresh', {
-        method: 'POST',
-      })
-
-      const data = await response.json()
-
-      if (data.success) {
-        localStorage.setItem('adminToken', data.token)
-        setUser(data.user)
-        return true
-      } else {
-        throw new Error(data.message)
-      }
-    } catch (error) {
-      console.error('Token refresh failed:', error)
-      await logout()
-      return false
-    }
-  }, [setUser, logout])
-
   const checkAuth = useCallback(async (): Promise<void> => {
     try {
-      const token = localStorage.getItem('adminToken')
-      
-      if (!token) {
-        setUser(null)
-        return
-      }
-
-      const response = await fetch('/api/auth/profile', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+      const response = await fetch('/api/auth/me', {
+        credentials: 'include'
       })
 
       if (response.ok) {
@@ -133,47 +96,25 @@ export function useAuth(): UseAuthReturn {
         if (data.success) {
           setUser(data.user)
         } else {
-          throw new Error('Invalid token')
-        }
-      } else if (response.status === 401) {
-        // Try to refresh token
-        const refreshed = await refreshToken()
-        if (!refreshed) {
           setUser(null)
         }
       } else {
-        throw new Error('Authentication check failed')
+        setUser(null)
       }
     } catch (error) {
       console.error('Auth check error:', error)
-      localStorage.removeItem('adminToken')
-      localStorage.removeItem('userRole')
       setUser(null)
     }
-  }, [setUser, refreshToken])
+  }, [setUser])
 
-  // Check authentication on mount
   useEffect(() => {
     checkAuth()
   }, [checkAuth])
-
-  // Set up token refresh interval
-  useEffect(() => {
-    if (state.user) {
-      // Refresh token every 20 minutes (tokens expire in 24 hours)
-      const interval = setInterval(() => {
-        refreshToken()
-      }, 20 * 60 * 1000)
-
-      return () => clearInterval(interval)
-    }
-  }, [state.user, refreshToken])
 
   return {
     ...state,
     login,
     logout,
-    refreshToken,
     checkAuth
   }
 }

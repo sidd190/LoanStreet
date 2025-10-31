@@ -45,8 +45,12 @@ export default function AdminDashboard() {
 
   // Load stats on mount and when user changes
   useEffect(() => {
-    if (user && !userLoading) {
-      loadStats()
+    if (!userLoading) {
+      if (user) {
+        loadStats()
+      } else {
+        setLoading(false)
+      }
     }
   }, [user, userLoading, loadStats])
 

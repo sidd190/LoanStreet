@@ -9,6 +9,7 @@ import {
   Filter,
   BarChart3,
   TrendingUp,
+  TrendingDown,
   Users,
   Target,
   Award,

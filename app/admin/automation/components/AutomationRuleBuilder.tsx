@@ -759,7 +759,7 @@ function ActionsBuilder({
           {actionTypes.map(({ type, label, icon: Icon, color }) => (
             <button
               key={type}
-              onClick={() => onAdd(type)}
+              onClick={() => onAdd(type as any)}
               className={`p-3 border-2 border-dashed border-gray-300 rounded-lg hover:border-${color}-300 hover:bg-${color}-50 transition-colors group`}
             >
               <Icon className={`w-6 h-6 text-${color}-600 mx-auto mb-2`} />

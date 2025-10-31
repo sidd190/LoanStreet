@@ -206,9 +206,8 @@ function AutomationPageContent() {
       name: automation.name,
       description: automation.description,
       trigger: {
-        type: 'time', // Default, should be parsed from automation.schedule
-        config: automation.schedule
-      },
+        type: 'time' // Default, should be parsed from automation.schedule
+      } as any,
       conditions: [], // Should be parsed from automation conditions
       actions: [], // Should be parsed from automation actions
       isActive: automation.status === 'active'
@@ -587,9 +586,8 @@ function AutomationPageContent() {
                   name: 'Welcome Series',
                   description: 'Automated welcome messages for new leads',
                   trigger: {
-                    type: 'event',
-                    config: { event: 'new_lead' }
-                  },
+                    type: 'event'
+                  } as any,
                   conditions: [],
                   actions: [
                     {
@@ -626,9 +624,8 @@ function AutomationPageContent() {
                   name: 'Re-engagement Campaign',
                   description: 'Win back inactive leads',
                   trigger: {
-                    type: 'time',
-                    config: { frequency: 'weekly', time: '10:00' }
-                  },
+                    type: 'time'
+                  } as any,
                   conditions: [
                     {
                       field: 'lastContact',
@@ -671,9 +668,8 @@ function AutomationPageContent() {
                   name: 'Lead Scoring Automation',
                   description: 'Automatically score and prioritize leads',
                   trigger: {
-                    type: 'event',
-                    config: { event: 'message_received' }
-                  },
+                    type: 'event'
+                  } as any,
                   conditions: [],
                   actions: [
                     {

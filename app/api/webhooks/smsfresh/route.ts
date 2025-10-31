@@ -875,7 +875,6 @@ async function handleCustomerReply(
     return false;
   }
 }
-}
 
 /**
  * Check message content for lead indicators and create lead if appropriate

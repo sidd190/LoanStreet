@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { AuthUser } from '@/lib/auth'
-import { validateRoutePermissions } from '@/lib/permissions'
 import UnauthorizedAccess from './UnauthorizedAccess'
 
 interface RouteProtectionProps {
@@ -26,60 +25,36 @@ export default function RouteProtection({
 
   useEffect(() => {
     checkAccess()
-  }, [pathname])
+  }, [])
 
   const checkAccess = async () => {
     try {
-      const token = localStorage.getItem('adminToken')
-      if (!token) {
-        router.push('/admin')
-        return
-      }
-
-      const response = await fetch('/api/auth/profile', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+      const response = await fetch('/api/auth/me', {
+        credentials: 'include'
       })
 
       if (response.ok) {
         const data = await response.json()
-        if (data.success) {
+        if (data.success && data.user) {
           setUser(data.user)
           
           // Check role requirement
           if (requiredRole && data.user.role !== requiredRole) {
             setAccessDenied(true)
             setDenialReason(`This page requires ${requiredRole} role. You have ${data.user.role} role.`)
-            setLoading(false)
-            return
-          }
-          
-          // Validate route permissions
-          const routeValidation = validateRoutePermissions(data.user, pathname)
-          if (!routeValidation.allowed) {
-            if (routeValidation.redirectTo) {
-              router.push(routeValidation.redirectTo)
-              return
-            } else {
-              setAccessDenied(true)
-              setDenialReason(routeValidation.reason || 'Access denied')
-              setLoading(false)
-              return
-            }
           }
         } else {
-          throw new Error('Invalid token')
+          setAccessDenied(true)
+          setDenialReason('Authentication required')
         }
       } else {
-        throw new Error('Authentication failed')
+        setAccessDenied(true)
+        setDenialReason('Authentication required')
       }
     } catch (error) {
       console.error('Route protection check failed:', error)
-      localStorage.removeItem('adminToken')
-      localStorage.removeItem('userRole')
-      router.push('/admin')
-      return
+      setAccessDenied(true)
+      setDenialReason('Authentication required')
     } finally {
       setLoading(false)
     }

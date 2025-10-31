@@ -11,6 +11,8 @@ A modern, full-stack loan management platform with integrated WhatsApp messaging
 
 QuickLoan is a comprehensive loan management platform designed for financial institutions to streamline their loan processes, manage customer relationships, and automate communications through WhatsApp integration. The platform provides both customer-facing loan application features and a powerful admin panel for loan officers and administrators.
 
+> **🔐 Recent Update**: The authentication system has been cleaned up and simplified. Login no longer automatically redirects - users stay on the login page after successful authentication and can manually navigate to their desired page. See [AUTH_CLEANUP_SUMMARY.md](AUTH_CLEANUP_SUMMARY.md) for details.
+
 ## 🚀 Key Features
 
 ### 🏠 **Customer Portal**

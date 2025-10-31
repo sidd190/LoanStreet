@@ -22,11 +22,7 @@ import {
   Calendar,
 } from "lucide-react";
 import Link from "next/link";
-import { AuthUser } from "@/lib/auth";
-import {
-  getAccessibleNavItems,
-  validateRoutePermissions,
-} from "@/lib/permissions";
+import { AuthUser, hasPermission, isAdmin } from "@/lib/auth";
 import { useAdminShortcuts } from "@/app/hooks/useKeyboardShortcuts";
 
 interface AdminLayoutProps {
@@ -69,80 +65,16 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
 
         if (data.success && data.user) {
           setUser(data.user);
-
-          // Redirect employees to employee interface if they try to access admin-only pages
-          if (data.user.role === "EMPLOYEE") {
-            const adminOnlyRoutes = [
-              "/admin/campaigns",
-              "/admin/contacts",
-              "/admin/import",
-              "/admin/analytics",
-              "/admin/automation",
-              "/admin/settings",
-            ];
-
-            if (adminOnlyRoutes.some((route) => pathname.startsWith(route))) {
-              console.log(`🔄 AdminLayout: Employee user trying to access admin-only route ${pathname}, redirecting to dashboard`)
-              router.push("/admin/dashboard");
-              return;
-            }
-          }
-
-          // Skip route validation for ADMIN users - they should have access to all routes
-          if (data.user.role === 'ADMIN') {
-            console.log("🔐 AdminLayout: Admin user detected, skipping route validation");
-          } else {
-            // Only validate routes for EMPLOYEE users
-            console.log("🔐 AdminLayout: Current pathname:", pathname);
-            console.log("🔐 AdminLayout: User role:", data.user.role);
-            console.log(
-              "🔐 AdminLayout: User permissions:",
-              data.user.permissions
-            );
-
-            const routeValidation = validateRoutePermissions(data.user, pathname);
-            console.log(
-              "🔐 AdminLayout: Route validation result:",
-              JSON.stringify(routeValidation, null, 2)
-            );
-            if (!routeValidation.allowed && routeValidation.redirectTo) {
-              console.log(
-                "🔄 AdminLayout: Route validation failed, redirecting to:",
-                routeValidation.redirectTo,
-                "Reason:",
-                routeValidation.reason
-              );
-              router.push(routeValidation.redirectTo);
-              return;
-            }
-          }
         } else {
-          console.log(
-            "❌ AdminLayout: Auth response indicates failure:",
-            data.message || "No success flag or user data"
-          );
-          console.log(
-            "❌ AdminLayout: Full response data:",
-            JSON.stringify(data)
-          );
           throw new Error(data.message || "Invalid token");
         }
       } else {
-        console.log(
-          "❌ AdminLayout: Auth request failed with status:",
-          response.status
-        );
-        const errorData = await response.json().catch(() => ({}));
-        console.log("❌ AdminLayout: Error response:", errorData);
         throw new Error("Authentication failed");
       }
     } catch (error) {
-      console.error("❌ AdminLayout: Authentication check failed:", error);
-      // Only redirect to login if we're not already on the login page
-      if (pathname !== "/admin") {
-        console.log("🔄 AdminLayout: Redirecting to login page");
-        router.push("/admin");
-      }
+      console.error("Authentication check failed:", error);
+      // Don't redirect - just set user to null
+      setUser(null);
     } finally {
       setLoading(false);
     }
@@ -154,15 +86,25 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
         method: "POST",
         credentials: "include",
       });
+      setUser(null);
+      // Reload the page to clear state
+      window.location.href = "/admin";
     } catch (error) {
       console.error("Logout error:", error);
-    } finally {
-      router.push("/admin");
     }
   };
 
   // Get navigation items based on user permissions
-  const navItems = user ? getAccessibleNavItems(user) : [];
+  const navItems = user ? [
+    { name: 'Dashboard', href: '/admin/dashboard', icon: 'LayoutDashboard', permission: 'dashboard:view' },
+    { name: 'Messages', href: '/admin/messages', icon: 'MessageSquare', permission: 'messages:view' },
+    { name: 'Leads', href: '/admin/leads', icon: 'Phone', permission: 'leads:view' },
+    { name: 'Campaigns', href: '/admin/campaigns', icon: 'Target', permission: 'campaigns:view' },
+    { name: 'Contacts', href: '/admin/contacts', icon: 'Users', permission: 'contacts:view' },
+    { name: 'Data Import', href: '/admin/import', icon: 'Upload', permission: 'contacts:create' },
+    { name: 'Analytics', href: '/admin/analytics', icon: 'BarChart3', permission: 'analytics:view' },
+    { name: 'Settings', href: '/admin/settings', icon: 'Settings', permission: 'settings:manage' }
+  ].filter(item => hasPermission(user, item.permission)) : [];
 
   // Icon mapping
   const iconMap = {
@@ -186,15 +128,20 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   }
 
   if (!user) {
-    // If authentication failed and we're not on the login page, redirect will happen in checkAuthentication
     // If we're on the login page, don't render the admin layout
     if (pathname === "/admin") {
       return null; // Let the login page render
     }
-    // For other pages, show loading while redirect happens
+    // For other pages, show a message to login
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary-600"></div>
+        <div className="text-center">
+          <h2 className="text-2xl font-bold text-gray-900 mb-4">Authentication Required</h2>
+          <p className="text-gray-600 mb-6">Please log in to access this page.</p>
+          <Link href="/admin" className="inline-block bg-primary-600 text-white px-6 py-3 rounded-lg hover:bg-primary-700 transition-colors">
+            Go to Login
+          </Link>
+        </div>
       </div>
     );
   }
