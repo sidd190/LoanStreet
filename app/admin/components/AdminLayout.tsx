@@ -88,28 +88,33 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
             }
           }
 
-          // Validate route permissions
-          console.log("🔐 AdminLayout: Current pathname:", pathname);
-          console.log("🔐 AdminLayout: User role:", data.user.role);
-          console.log(
-            "🔐 AdminLayout: User permissions:",
-            data.user.permissions
-          );
-
-          const routeValidation = validateRoutePermissions(data.user, pathname);
-          console.log(
-            "🔐 AdminLayout: Route validation result:",
-            JSON.stringify(routeValidation, null, 2)
-          );
-          if (!routeValidation.allowed && routeValidation.redirectTo) {
+          // Skip route validation for ADMIN users - they should have access to all routes
+          if (data.user.role === 'ADMIN') {
+            console.log("🔐 AdminLayout: Admin user detected, skipping route validation");
+          } else {
+            // Only validate routes for EMPLOYEE users
+            console.log("🔐 AdminLayout: Current pathname:", pathname);
+            console.log("🔐 AdminLayout: User role:", data.user.role);
             console.log(
-              "🔄 AdminLayout: Route validation failed, redirecting to:",
-              routeValidation.redirectTo,
-              "Reason:",
-              routeValidation.reason
+              "🔐 AdminLayout: User permissions:",
+              data.user.permissions
             );
-            router.push(routeValidation.redirectTo);
-            return;
+
+            const routeValidation = validateRoutePermissions(data.user, pathname);
+            console.log(
+              "🔐 AdminLayout: Route validation result:",
+              JSON.stringify(routeValidation, null, 2)
+            );
+            if (!routeValidation.allowed && routeValidation.redirectTo) {
+              console.log(
+                "🔄 AdminLayout: Route validation failed, redirecting to:",
+                routeValidation.redirectTo,
+                "Reason:",
+                routeValidation.reason
+              );
+              router.push(routeValidation.redirectTo);
+              return;
+            }
           }
         } else {
           console.log(

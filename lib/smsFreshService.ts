@@ -1,904 +1,513 @@
-import axios, { AxiosResponse } from 'axios';
-import { logger } from './logger';
-import { PrismaClient } from '@prisma/client';
+/**
+ * SMSFresh WhatsApp API Integration Service
+ * Handles all WhatsApp messaging through SMSFresh API
+ */
 
-const prisma = new PrismaClient();
+import Logger, { DataSource } from './logger'
 
-// Types for SMSFresh API integration
-export interface SMSFreshConfig {
-  apiKey: string;
-  apiUrl: string;
-  timeout?: number;
-  retryAttempts?: number;
-  enableQueue?: boolean;
-  maxQueueSize?: number;
+export interface WhatsAppMessage {
+  phone: string
+  text: string
+  templateName?: string
+  params?: string[]
+  mediaUrl?: string
+  mediaType?: 'image' | 'video' | 'document'
+  messageType?: 'normal' | 'auth'
 }
 
-export interface SMSFreshTextParams {
-  phone: string[]; // 10-digit numbers without +91
-  templateName: string;
-  parameters?: string[];
+export interface WhatsAppResponse {
+  success: boolean
+  messageId?: string
+  status?: string
+  error?: string
+  details?: any
 }
 
-export interface SMSFreshMediaParams extends SMSFreshTextParams {
-  mediaType: 'image' | 'video' | 'document';
-  mediaUrl: string;
-}
-
-export interface SMSFreshOTPParams {
-  phone: string[];
-  templateName: string;
-  otp: string;
-}
-
-export interface SMSFreshReplyParams {
-  phone: string;
-  text: string;
-}
-
-export interface SMSFreshResponse {
-  success: boolean;
-  messageId?: string;
-  error?: string;
-  errorCode?: string;
-  deliveryStatus?: 'sent' | 'delivered' | 'failed' | 'queued' | 'retry';
-  data?: any;
-  retryCount?: number;
-  queuedAt?: string;
-  sentAt?: string;
-}
-
-export interface MessageQueue {
-  id: string;
-  type: 'whatsapp_text' | 'whatsapp_media' | 'whatsapp_otp' | 'whatsapp_reply' | 'sms';
-  payload: any;
-  priority: 'low' | 'normal' | 'high' | 'urgent';
-  retryCount: number;
-  maxRetries: number;
-  nextRetryAt?: Date;
-  status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
-  createdAt: Date;
-  updatedAt: Date;
-  error?: string;
-}
-
-export interface SMSFreshWebhookPayload {
-  messageId: string;
-  phone: string;
-  status: 'delivered' | 'read' | 'failed' | 'replied';
-  content?: string;
-  timestamp: string;
-  type: 'SMS' | 'WHATSAPP';
+export interface WhatsAppTemplate {
+  name: string
+  content: string
+  category: string
+  language: string
+  status: 'APPROVED' | 'PENDING' | 'REJECTED'
+  components?: {
+    type: 'HEADER' | 'BODY' | 'FOOTER' | 'BUTTONS'
+    text?: string
+    parameters?: string[]
+  }[]
 }
 
 class SMSFreshService {
-  private config: SMSFreshConfig;
-  private axiosInstance;
-  private messageQueue: Map<string, MessageQueue> = new Map();
-  private isProcessingQueue = false;
-  private queueProcessingInterval?: NodeJS.Timeout;
+  private readonly baseUrl: string
+  private readonly user: string
+  private readonly pass: string
+  private readonly sender: string
 
-  constructor(config: SMSFreshConfig) {
-    this.config = {
-      timeout: 30000,
-      retryAttempts: 3,
-      enableQueue: true,
-      maxQueueSize: 1000,
-      ...config,
-    };
+  constructor() {
+    this.baseUrl = process.env.SMSFRESH_API_URL || 'http://trans.smsfresh.co/api/sendmsg.php'
+    this.user = process.env.SMSFRESH_USER || ''
+    this.pass = process.env.SMSFRESH_PASS || ''
+    this.sender = process.env.SMSFRESH_SENDER || 'BUZWAP'
 
-    this.axiosInstance = axios.create({
-      baseURL: this.config.apiUrl,
-      timeout: this.config.timeout,
-      headers: {
-        'Authorization': `Bearer ${this.config.apiKey}`,
-        'Content-Type': 'application/json',
-      },
-    });
+    if (!this.user || !this.pass) {
+      Logger.warn(DataSource.API, 'smsfresh', 'SMSFresh credentials not configured')
+    }
+  }
 
-    // Add request interceptor for logging
-    this.axiosInstance.interceptors.request.use(
-      (config) => {
-        logger.info('SMSFresh API Request', {
-          url: config.url,
-          method: config.method,
-          data: config.data,
-        });
-        return config;
-      },
-      (error) => {
-        logger.error('SMSFresh API Request Error', error);
-        return Promise.reject(error);
+  /**
+   * Send a normal WhatsApp message
+   */
+  async sendMessage(message: WhatsAppMessage): Promise<WhatsAppResponse> {
+    try {
+      Logger.info(DataSource.API, 'smsfresh', `Sending WhatsApp message to ${message.phone}`)
+
+      const params = new URLSearchParams({
+        user: this.user,
+        pass: this.pass,
+        sender: this.sender,
+        phone: this.formatPhoneNumber(message.phone),
+        text: message.templateName || message.text,
+        priority: 'wa',
+        stype: message.messageType || 'normal'
+      })
+
+      // Add parameters if provided
+      if (message.params && message.params.length > 0) {
+        params.append('Params', message.params.join(','))
       }
-    );
 
-    // Add response interceptor for logging
-    this.axiosInstance.interceptors.response.use(
-      (response) => {
-        logger.info('SMSFresh API Response', {
+      // Add media if provided
+      if (message.mediaUrl && message.mediaType) {
+        params.append('htype', message.mediaType)
+        params.append('url', message.mediaUrl)
+      }
+
+      const url = `${this.baseUrl}?${params.toString()}`
+      
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'User-Agent': 'QuickLoan-WhatsApp-Service/1.0'
+        }
+      })
+
+      const responseText = await response.text()
+      
+      if (response.ok) {
+        Logger.success(DataSource.API, 'smsfresh', `WhatsApp message sent successfully to ${message.phone}`)
+        
+        return {
+          success: true,
+          messageId: this.extractMessageId(responseText),
+          status: 'SENT',
+          details: responseText
+        }
+      } else {
+        Logger.error(DataSource.API, 'smsfresh', `Failed to send WhatsApp message to ${message.phone}`, {
           status: response.status,
-          data: response.data,
-        });
-        return response;
+          response: responseText
+        })
+        
+        return {
+          success: false,
+          error: `HTTP ${response.status}: ${responseText}`,
+          details: responseText
+        }
+      }
+
+    } catch (error) {
+      Logger.error(DataSource.API, 'smsfresh', `WhatsApp message sending failed for ${message.phone}`, error)
+      
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error occurred'
+      }
+    }
+  }
+
+  /**
+   * Send WhatsApp message with template
+   */
+  async sendTemplateMessage(
+    phone: string, 
+    templateName: string, 
+    params?: string[]
+  ): Promise<WhatsAppResponse> {
+    return this.sendMessage({
+      phone,
+      text: templateName,
+      templateName,
+      params,
+      messageType: 'normal'
+    })
+  }
+
+  /**
+   * Send WhatsApp message with media
+   */
+  async sendMediaMessage(
+    phone: string,
+    templateName: string,
+    mediaUrl: string,
+    mediaType: 'image' | 'video' | 'document',
+    params?: string[]
+  ): Promise<WhatsAppResponse> {
+    return this.sendMessage({
+      phone,
+      text: templateName,
+      templateName,
+      params,
+      mediaUrl,
+      mediaType,
+      messageType: 'normal'
+    })
+  }
+
+  /**
+   * Send authentication OTP message
+   */
+  async sendOTPMessage(phone: string, templateName: string, otp: string): Promise<WhatsAppResponse> {
+    return this.sendMessage({
+      phone,
+      text: templateName,
+      templateName,
+      params: [otp],
+      messageType: 'auth'
+    })
+  }
+
+  /**
+   * Send normal text message (after customer replies)
+   */
+  async sendTextMessage(phone: string, text: string): Promise<WhatsAppResponse> {
+    try {
+      const params = new URLSearchParams({
+        user: this.user,
+        pass: this.pass,
+        sender: this.sender,
+        phone: this.formatPhoneNumber(phone),
+        text: text,
+        priority: 'wa',
+        stype: 'normal',
+        htype: 'normal'
+      })
+
+      const url = `${this.baseUrl}?${params.toString()}`
+      
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'User-Agent': 'QuickLoan-WhatsApp-Service/1.0'
+        }
+      })
+
+      const responseText = await response.text()
+      
+      if (response.ok) {
+        Logger.success(DataSource.API, 'smsfresh', `WhatsApp text message sent successfully to ${phone}`)
+        
+        return {
+          success: true,
+          messageId: this.extractMessageId(responseText),
+          status: 'SENT',
+          details: responseText
+        }
+      } else {
+        return {
+          success: false,
+          error: `HTTP ${response.status}: ${responseText}`,
+          details: responseText
+        }
+      }
+
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error occurred'
+      }
+    }
+  }
+
+  /**
+   * Bulk send WhatsApp messages
+   */
+  async sendBulkMessages(messages: WhatsAppMessage[]): Promise<WhatsAppResponse[]> {
+    Logger.info(DataSource.API, 'smsfresh', `Sending bulk WhatsApp messages to ${messages.length} recipients`)
+
+    const results: WhatsAppResponse[] = []
+    const batchSize = 10 // Process in batches to avoid overwhelming the API
+    
+    for (let i = 0; i < messages.length; i += batchSize) {
+      const batch = messages.slice(i, i + batchSize)
+      
+      const batchPromises = batch.map(message => 
+        this.sendMessage(message).catch(error => ({
+          success: false,
+          error: error.message
+        }))
+      )
+      
+      const batchResults = await Promise.all(batchPromises)
+      results.push(...batchResults)
+      
+      // Add delay between batches to respect rate limits
+      if (i + batchSize < messages.length) {
+        await this.delay(1000) // 1 second delay between batches
+      }
+    }
+
+    const successCount = results.filter(r => r.success).length
+    Logger.info(DataSource.API, 'smsfresh', `Bulk WhatsApp sending completed: ${successCount}/${messages.length} successful`)
+
+    return results
+  }
+
+  /**
+   * Get available WhatsApp templates (mock implementation)
+   * In a real implementation, this would fetch from SMSFresh API
+   */
+  async getTemplates(): Promise<WhatsAppTemplate[]> {
+    Logger.info(DataSource.API, 'smsfresh', 'Fetching WhatsApp templates')
+
+    // Mock templates based on common loan scenarios
+    const templates: WhatsAppTemplate[] = [
+      {
+        name: 'LOAN_WELCOME',
+        content: 'Welcome to QuickLoan! Your loan application has been received. Reference ID: {{1}}',
+        category: 'UTILITY',
+        language: 'en',
+        status: 'APPROVED',
+        components: [
+          {
+            type: 'BODY',
+            text: 'Welcome to QuickLoan! Your loan application has been received. Reference ID: {{1}}',
+            parameters: ['reference_id']
+          }
+        ]
       },
-      (error) => {
-        logger.error('SMSFresh API Response Error', {
-          status: error.response?.status,
-          data: error.response?.data,
-          message: error.message,
-        });
-        return Promise.reject(error);
+      {
+        name: 'LOAN_APPROVED',
+        content: 'Congratulations! Your loan of ₹{{1}} has been approved. Amount will be credited within 24 hours.',
+        category: 'UTILITY',
+        language: 'en',
+        status: 'APPROVED',
+        components: [
+          {
+            type: 'BODY',
+            text: 'Congratulations! Your loan of ₹{{1}} has been approved. Amount will be credited within 24 hours.',
+            parameters: ['loan_amount']
+          }
+        ]
+      },
+      {
+        name: 'LOAN_REJECTED',
+        content: 'We regret to inform you that your loan application has been declined. Please contact us for more details.',
+        category: 'UTILITY',
+        language: 'en',
+        status: 'APPROVED'
+      },
+      {
+        name: 'DOCUMENT_REQUIRED',
+        content: 'Hi {{1}}, we need additional documents for your loan application. Please upload: {{2}}',
+        category: 'UTILITY',
+        language: 'en',
+        status: 'APPROVED',
+        components: [
+          {
+            type: 'BODY',
+            text: 'Hi {{1}}, we need additional documents for your loan application. Please upload: {{2}}',
+            parameters: ['customer_name', 'document_list']
+          }
+        ]
+      },
+      {
+        name: 'EMI_REMINDER',
+        content: 'Reminder: Your EMI of ₹{{1}} is due on {{2}}. Please ensure sufficient balance in your account.',
+        category: 'UTILITY',
+        language: 'en',
+        status: 'APPROVED',
+        components: [
+          {
+            type: 'BODY',
+            text: 'Reminder: Your EMI of ₹{{1}} is due on {{2}}. Please ensure sufficient balance in your account.',
+            parameters: ['emi_amount', 'due_date']
+          }
+        ]
+      },
+      {
+        name: 'OTP_VERIFICATION',
+        content: 'Your OTP for QuickLoan verification is: {{1}}. Valid for 10 minutes. Do not share with anyone.',
+        category: 'AUTHENTICATION',
+        language: 'en',
+        status: 'APPROVED',
+        components: [
+          {
+            type: 'BODY',
+            text: 'Your OTP for QuickLoan verification is: {{1}}. Valid for 10 minutes. Do not share with anyone.',
+            parameters: ['otp']
+          }
+        ]
+      },
+      {
+        name: 'LOAN_DISBURSED',
+        content: 'Great news! Your loan amount of ₹{{1}} has been credited to your account ending with {{2}}.',
+        category: 'UTILITY',
+        language: 'en',
+        status: 'APPROVED',
+        components: [
+          {
+            type: 'BODY',
+            text: 'Great news! Your loan amount of ₹{{1}} has been credited to your account ending with {{2}}.',
+            parameters: ['loan_amount', 'account_number']
+          }
+        ]
+      },
+      {
+        name: 'FOLLOW_UP',
+        content: 'Hi {{1}}, we noticed you started a loan application. Need help completing it? Call us at 1800-XXX-XXXX',
+        category: 'MARKETING',
+        language: 'en',
+        status: 'APPROVED',
+        components: [
+          {
+            type: 'BODY',
+            text: 'Hi {{1}}, we noticed you started a loan application. Need help completing it? Call us at 1800-XXX-XXXX',
+            parameters: ['customer_name']
+          }
+        ]
       }
-    );
+    ]
 
-    // Initialize queue processing if enabled
-    if (this.config.enableQueue) {
-      this.startQueueProcessing();
-    }
+    Logger.success(DataSource.API, 'smsfresh', `Retrieved ${templates.length} WhatsApp templates`)
+    return templates
   }
 
   /**
-   * Send normal text WhatsApp message with enhanced error handling and queuing
-   * Requirements: 8.1, 8.3
+   * Test API connectivity
    */
-  async sendWhatsAppText(params: SMSFreshTextParams, priority: 'low' | 'normal' | 'high' | 'urgent' = 'normal'): Promise<SMSFreshResponse> {
+  async testConnection(): Promise<{ success: boolean; message: string; details?: any }> {
     try {
-      const payload = {
-        type: 'whatsapp',
-        recipients: this.formatPhoneNumbers(params.phone),
-        template: params.templateName,
-        parameters: params.parameters || [],
-      };
+      Logger.info(DataSource.API, 'smsfresh', 'Testing SMSFresh API connection')
 
-      // Check if we should queue the message or send immediately
-      if (this.config.enableQueue && priority !== 'urgent') {
-        return await this.queueMessage('whatsapp_text', payload, priority);
-      }
-
-      const response: AxiosResponse = await this.executeWithRetry(
-        () => this.axiosInstance.post('/messages/whatsapp/text', payload)
-      );
-
-      const result = {
-        success: true,
-        messageId: response.data.messageId,
-        deliveryStatus: 'sent' as const,
-        data: response.data,
-        sentAt: new Date().toISOString(),
-      };
-
-      // Log successful send
-      await this.logMessageSend(result, payload, 'whatsapp_text');
-      
-      return result;
-    } catch (error) {
-      const errorResult = {
-        success: false,
-        error: this.extractErrorMessage(error),
-        errorCode: this.extractErrorCode(error),
-        deliveryStatus: 'failed' as const,
-      };
-
-      // Log failed send
-      await this.logMessageSend(errorResult, params, 'whatsapp_text', error);
-      
-      return errorResult;
-    }
-  }
-
-  /**
-   * Send WhatsApp message with media attachments with enhanced error handling
-   * Requirements: 8.1, 8.3
-   */
-  async sendWhatsAppMedia(params: SMSFreshMediaParams, priority: 'low' | 'normal' | 'high' | 'urgent' = 'normal'): Promise<SMSFreshResponse> {
-    try {
-      // Validate media URL before sending
-      if (!this.isValidMediaUrl(params.mediaUrl)) {
+      if (!this.user || !this.pass) {
         return {
           success: false,
-          error: 'Invalid media URL provided',
-          errorCode: 'INVALID_MEDIA_URL',
-          deliveryStatus: 'failed',
-        };
+          message: 'SMSFresh credentials not configured. Please set SMSFRESH_USER and SMSFRESH_PASS environment variables.'
+        }
       }
 
-      const payload = {
-        type: 'whatsapp',
-        recipients: this.formatPhoneNumbers(params.phone),
-        template: params.templateName,
-        parameters: params.parameters || [],
-        media: {
-          type: params.mediaType,
-          url: params.mediaUrl,
-        },
-      };
+      // Test with a dummy phone number (won't actually send)
+      const testParams = new URLSearchParams({
+        user: this.user,
+        pass: this.pass,
+        sender: this.sender,
+        phone: '9999999999', // Test number
+        text: 'TEST_CONNECTION',
+        priority: 'wa',
+        stype: 'normal'
+      })
 
-      // Check if we should queue the message or send immediately
-      if (this.config.enableQueue && priority !== 'urgent') {
-        return await this.queueMessage('whatsapp_media', payload, priority);
-      }
-
-      const response: AxiosResponse = await this.executeWithRetry(
-        () => this.axiosInstance.post('/messages/whatsapp/media', payload)
-      );
-
-      const result = {
-        success: true,
-        messageId: response.data.messageId,
-        deliveryStatus: 'sent' as const,
-        data: response.data,
-        sentAt: new Date().toISOString(),
-      };
-
-      // Log successful send
-      await this.logMessageSend(result, payload, 'whatsapp_media');
+      const url = `${this.baseUrl}?${testParams.toString()}`
       
-      return result;
-    } catch (error) {
-      const errorResult = {
-        success: false,
-        error: this.extractErrorMessage(error),
-        errorCode: this.extractErrorCode(error),
-        deliveryStatus: 'failed' as const,
-      };
+      const response = await fetch(url, {
+        method: 'GET',
+        timeout: 10000, // 10 second timeout
+        headers: {
+          'User-Agent': 'QuickLoan-WhatsApp-Service/1.0'
+        }
+      })
 
-      // Log failed send
-      await this.logMessageSend(errorResult, params, 'whatsapp_media', error);
-      
-      return errorResult;
-    }
-  }
+      const responseText = await response.text()
 
-  /**
-   * Send authentication OTP message with high priority
-   * Requirements: 8.1, 8.3
-   */
-  async sendAuthOTP(params: SMSFreshOTPParams): Promise<SMSFreshResponse> {
-    try {
-      // Validate OTP format
-      if (!this.isValidOTP(params.otp)) {
+      if (response.ok) {
+        Logger.success(DataSource.API, 'smsfresh', 'SMSFresh API connection test successful')
         return {
-          success: false,
-          error: 'Invalid OTP format',
-          errorCode: 'INVALID_OTP_FORMAT',
-          deliveryStatus: 'failed',
-        };
-      }
-
-      const payload = {
-        type: 'whatsapp',
-        recipients: this.formatPhoneNumbers(params.phone),
-        template: params.templateName,
-        parameters: [params.otp],
-        priority: 'high', // OTP messages should have high priority
-      };
-
-      // OTP messages are always sent immediately (urgent priority)
-      const response: AxiosResponse = await this.executeWithRetry(
-        () => this.axiosInstance.post('/messages/whatsapp/otp', payload)
-      );
-
-      const result = {
-        success: true,
-        messageId: response.data.messageId,
-        deliveryStatus: 'sent' as const,
-        data: response.data,
-        sentAt: new Date().toISOString(),
-      };
-
-      // Log successful send
-      await this.logMessageSend(result, payload, 'whatsapp_otp');
-      
-      return result;
-    } catch (error) {
-      const errorResult = {
-        success: false,
-        error: this.extractErrorMessage(error),
-        errorCode: this.extractErrorCode(error),
-        deliveryStatus: 'failed' as const,
-      };
-
-      // Log failed send
-      await this.logMessageSend(errorResult, params, 'whatsapp_otp', error);
-      
-      return errorResult;
-    }
-  }
-
-  /**
-   * Send reply text message (for customer responses) with enhanced handling
-   * Requirements: 8.1, 8.3
-   */
-  async sendReplyText(params: SMSFreshReplyParams, priority: 'low' | 'normal' | 'high' | 'urgent' = 'high'): Promise<SMSFreshResponse> {
-    try {
-      // Validate message content
-      if (!params.text || params.text.trim().length === 0) {
-        return {
-          success: false,
-          error: 'Message content cannot be empty',
-          errorCode: 'EMPTY_MESSAGE_CONTENT',
-          deliveryStatus: 'failed',
-        };
-      }
-
-      if (params.text.length > 4096) {
-        return {
-          success: false,
-          error: 'Message content exceeds maximum length (4096 characters)',
-          errorCode: 'MESSAGE_TOO_LONG',
-          deliveryStatus: 'failed',
-        };
-      }
-
-      const payload = {
-        type: 'whatsapp',
-        recipient: this.formatPhoneNumber(params.phone),
-        message: params.text,
-        isReply: true,
-      };
-
-      // Reply messages are typically high priority, but can be queued if not urgent
-      if (this.config.enableQueue && priority !== 'urgent') {
-        return await this.queueMessage('whatsapp_reply', payload, priority);
-      }
-
-      const response: AxiosResponse = await this.executeWithRetry(
-        () => this.axiosInstance.post('/messages/whatsapp/reply', payload)
-      );
-
-      const result = {
-        success: true,
-        messageId: response.data.messageId,
-        deliveryStatus: 'sent' as const,
-        data: response.data,
-        sentAt: new Date().toISOString(),
-      };
-
-      // Log successful send
-      await this.logMessageSend(result, payload, 'whatsapp_reply');
-      
-      return result;
-    } catch (error) {
-      const errorResult = {
-        success: false,
-        error: this.extractErrorMessage(error),
-        errorCode: this.extractErrorCode(error),
-        deliveryStatus: 'failed' as const,
-      };
-
-      // Log failed send
-      await this.logMessageSend(errorResult, params, 'whatsapp_reply', error);
-      
-      return errorResult;
-    }
-  }
-
-  /**
-   * Send SMS message (fallback option) with enhanced error handling
-   * Requirements: 8.3, 8.5
-   */
-  async sendSMS(params: SMSFreshTextParams, priority: 'low' | 'normal' | 'high' | 'urgent' = 'normal'): Promise<SMSFreshResponse> {
-    try {
-      const payload = {
-        type: 'sms',
-        recipients: this.formatPhoneNumbers(params.phone),
-        template: params.templateName,
-        parameters: params.parameters || [],
-      };
-
-      // Check if we should queue the message or send immediately
-      if (this.config.enableQueue && priority !== 'urgent') {
-        return await this.queueMessage('sms', payload, priority);
-      }
-
-      const response: AxiosResponse = await this.executeWithRetry(
-        () => this.axiosInstance.post('/messages/sms', payload)
-      );
-
-      const result = {
-        success: true,
-        messageId: response.data.messageId,
-        deliveryStatus: 'sent' as const,
-        data: response.data,
-        sentAt: new Date().toISOString(),
-      };
-
-      // Log successful send
-      await this.logMessageSend(result, payload, 'sms');
-      
-      return result;
-    } catch (error) {
-      const errorResult = {
-        success: false,
-        error: this.extractErrorMessage(error),
-        errorCode: this.extractErrorCode(error),
-        deliveryStatus: 'failed' as const,
-      };
-
-      // Log failed send
-      await this.logMessageSend(errorResult, params, 'sms', error);
-      
-      return errorResult;
-    }
-  }
-
-  /**
-   * Get message delivery status
-   */
-  async getMessageStatus(messageId: string): Promise<SMSFreshResponse> {
-    try {
-      const response: AxiosResponse = await this.axiosInstance.get(
-        `/messages/${messageId}/status`
-      );
-
-      return {
-        success: true,
-        deliveryStatus: response.data.status,
-        data: response.data,
-      };
-    } catch (error) {
-      logger.error('Failed to get message status', error);
-      return {
-        success: false,
-        error: this.extractErrorMessage(error),
-      };
-    }
-  }
-
-  /**
-   * Get account balance and credits
-   */
-  async getAccountBalance(): Promise<SMSFreshResponse> {
-    try {
-      const response: AxiosResponse = await this.axiosInstance.get('/account/balance');
-
-      return {
-        success: true,
-        data: response.data,
-      };
-    } catch (error) {
-      logger.error('Failed to get account balance', error);
-      return {
-        success: false,
-        error: this.extractErrorMessage(error),
-      };
-    }
-  }
-
-  /**
-   * Validate webhook signature (for security)
-   */
-  validateWebhookSignature(payload: string, signature: string, secret: string): boolean {
-    try {
-      const crypto = require('crypto');
-      const expectedSignature = crypto
-        .createHmac('sha256', secret)
-        .update(payload)
-        .digest('hex');
-      
-      return crypto.timingSafeEqual(
-        Buffer.from(signature),
-        Buffer.from(expectedSignature)
-      );
-    } catch (error) {
-      logger.error('Failed to validate webhook signature', error);
-      return false;
-    }
-  }
-
-  /**
-   * Queue message for later processing
-   */
-  private async queueMessage(type: MessageQueue['type'], payload: any, priority: 'low' | 'normal' | 'high' | 'urgent'): Promise<SMSFreshResponse> {
-    try {
-      if (this.messageQueue.size >= this.config.maxQueueSize!) {
-        return {
-          success: false,
-          error: 'Message queue is full',
-          errorCode: 'QUEUE_FULL',
-          deliveryStatus: 'failed',
-        };
-      }
-
-      const queueId = `${type}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      const queueItem: MessageQueue = {
-        id: queueId,
-        type,
-        payload,
-        priority,
-        retryCount: 0,
-        maxRetries: this.config.retryAttempts || 3,
-        status: 'pending',
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
-
-      this.messageQueue.set(queueId, queueItem);
-
-      logger.info('Message queued for processing', {
-        queueId,
-        type,
-        priority,
-        queueSize: this.messageQueue.size,
-      });
-
-      return {
-        success: true,
-        messageId: queueId,
-        deliveryStatus: 'queued',
-        queuedAt: new Date().toISOString(),
-      };
-    } catch (error) {
-      logger.error('Failed to queue message', error);
-      return {
-        success: false,
-        error: 'Failed to queue message',
-        errorCode: 'QUEUE_ERROR',
-        deliveryStatus: 'failed',
-      };
-    }
-  }
-
-  /**
-   * Start processing the message queue
-   */
-  private startQueueProcessing(): void {
-    if (this.queueProcessingInterval) {
-      clearInterval(this.queueProcessingInterval);
-    }
-
-    this.queueProcessingInterval = setInterval(async () => {
-      if (!this.isProcessingQueue && this.messageQueue.size > 0) {
-        await this.processQueue();
-      }
-    }, 5000); // Process queue every 5 seconds
-
-    logger.info('Message queue processing started');
-  }
-
-  /**
-   * Process queued messages
-   */
-  private async processQueue(): Promise<void> {
-    if (this.isProcessingQueue) return;
-
-    this.isProcessingQueue = true;
-
-    try {
-      const pendingMessages = Array.from(this.messageQueue.values())
-        .filter(item => item.status === 'pending' && (!item.nextRetryAt || item.nextRetryAt <= new Date()))
-        .sort((a, b) => {
-          // Sort by priority (urgent > high > normal > low) then by creation time
-          const priorityOrder = { urgent: 4, high: 3, normal: 2, low: 1 };
-          const priorityDiff = priorityOrder[b.priority] - priorityOrder[a.priority];
-          if (priorityDiff !== 0) return priorityDiff;
-          return a.createdAt.getTime() - b.createdAt.getTime();
-        });
-
-      // Process up to 5 messages at a time to avoid overwhelming the API
-      const messagesToProcess = pendingMessages.slice(0, 5);
-
-      for (const queueItem of messagesToProcess) {
-        await this.processQueuedMessage(queueItem);
-      }
-    } catch (error) {
-      logger.error('Error processing message queue', error);
-    } finally {
-      this.isProcessingQueue = false;
-    }
-  }
-
-  /**
-   * Process a single queued message
-   */
-  private async processQueuedMessage(queueItem: MessageQueue): Promise<void> {
-    try {
-      queueItem.status = 'processing';
-      queueItem.updatedAt = new Date();
-      this.messageQueue.set(queueItem.id, queueItem);
-
-      let result: SMSFreshResponse;
-
-      switch (queueItem.type) {
-        case 'whatsapp_text':
-          result = await this.executeWithRetry(() => 
-            this.axiosInstance.post('/messages/whatsapp/text', queueItem.payload)
-          );
-          break;
-        case 'whatsapp_media':
-          result = await this.executeWithRetry(() => 
-            this.axiosInstance.post('/messages/whatsapp/media', queueItem.payload)
-          );
-          break;
-        case 'whatsapp_otp':
-          result = await this.executeWithRetry(() => 
-            this.axiosInstance.post('/messages/whatsapp/otp', queueItem.payload)
-          );
-          break;
-        case 'whatsapp_reply':
-          result = await this.executeWithRetry(() => 
-            this.axiosInstance.post('/messages/whatsapp/reply', queueItem.payload)
-          );
-          break;
-        case 'sms':
-          result = await this.executeWithRetry(() => 
-            this.axiosInstance.post('/messages/sms', queueItem.payload)
-          );
-          break;
-        default:
-          throw new Error(`Unknown message type: ${queueItem.type}`);
-      }
-
-      // Mark as completed
-      queueItem.status = 'completed';
-      queueItem.updatedAt = new Date();
-      this.messageQueue.set(queueItem.id, queueItem);
-
-      // Log successful processing
-      await this.logMessageSend({
-        success: true,
-        messageId: result.data?.messageId || queueItem.id,
-        deliveryStatus: 'sent',
-        data: result.data,
-        sentAt: new Date().toISOString(),
-      }, queueItem.payload, queueItem.type);
-
-      logger.info('Queued message processed successfully', {
-        queueId: queueItem.id,
-        type: queueItem.type,
-        messageId: result.data?.messageId,
-      });
-
-      // Remove from queue after successful processing
-      setTimeout(() => {
-        this.messageQueue.delete(queueItem.id);
-      }, 60000); // Keep for 1 minute for status checking
-
-    } catch (error) {
-      queueItem.retryCount++;
-      
-      if (queueItem.retryCount >= queueItem.maxRetries) {
-        queueItem.status = 'failed';
-        queueItem.error = this.extractErrorMessage(error);
-        
-        // Log failed processing
-        await this.logMessageSend({
-          success: false,
-          error: queueItem.error,
-          errorCode: this.extractErrorCode(error),
-          deliveryStatus: 'failed',
-          retryCount: queueItem.retryCount,
-        }, queueItem.payload, queueItem.type, error);
-
-        logger.error('Queued message failed after max retries', {
-          queueId: queueItem.id,
-          type: queueItem.type,
-          retryCount: queueItem.retryCount,
-          error: queueItem.error,
-        });
+          success: true,
+          message: 'SMSFresh API is accessible and credentials are valid',
+          details: {
+            status: response.status,
+            response: responseText
+          }
+        }
       } else {
-        queueItem.status = 'pending';
-        queueItem.nextRetryAt = new Date(Date.now() + Math.pow(2, queueItem.retryCount) * 1000);
-        
-        logger.warn('Queued message failed, scheduling retry', {
-          queueId: queueItem.id,
-          type: queueItem.type,
-          retryCount: queueItem.retryCount,
-          nextRetryAt: queueItem.nextRetryAt,
-          error: this.extractErrorMessage(error),
-        });
+        Logger.warn(DataSource.API, 'smsfresh', 'SMSFresh API connection test failed', {
+          status: response.status,
+          response: responseText
+        })
+        return {
+          success: false,
+          message: `API returned HTTP ${response.status}`,
+          details: {
+            status: response.status,
+            response: responseText
+          }
+        }
       }
 
-      queueItem.updatedAt = new Date();
-      this.messageQueue.set(queueItem.id, queueItem);
+    } catch (error) {
+      Logger.error(DataSource.API, 'smsfresh', 'SMSFresh API connection test failed', error)
+      return {
+        success: false,
+        message: `Connection failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        details: error
+      }
     }
   }
 
   /**
-   * Get queue status
+   * Format phone number for SMSFresh API (remove country code if present)
    */
-  public getQueueStatus(): { size: number; pending: number; processing: number; failed: number } {
-    const items = Array.from(this.messageQueue.values());
-    return {
-      size: items.length,
-      pending: items.filter(item => item.status === 'pending').length,
-      processing: items.filter(item => item.status === 'processing').length,
-      failed: items.filter(item => item.status === 'failed').length,
-    };
-  }
-
-  /**
-   * Clear failed messages from queue
-   */
-  public clearFailedMessages(): number {
-    const failedItems = Array.from(this.messageQueue.entries())
-      .filter(([_, item]) => item.status === 'failed');
-    
-    failedItems.forEach(([id, _]) => {
-      this.messageQueue.delete(id);
-    });
-
-    logger.info('Cleared failed messages from queue', { count: failedItems.length });
-    return failedItems.length;
-  }
-
-  /**
-   * Stop queue processing
-   */
-  public stopQueueProcessing(): void {
-    if (this.queueProcessingInterval) {
-      clearInterval(this.queueProcessingInterval);
-      this.queueProcessingInterval = undefined;
-    }
-    logger.info('Message queue processing stopped');
-  }
-
-  // Private helper methods
-
-  private formatPhoneNumbers(phones: string[]): string[] {
-    return phones.map(phone => this.formatPhoneNumber(phone));
-  }
-
   private formatPhoneNumber(phone: string): string {
-    // Remove any non-digit characters
-    const cleaned = phone.replace(/\D/g, '');
+    // Remove all non-digit characters
+    let cleaned = phone.replace(/\D/g, '')
     
-    // Remove +91 prefix if present
+    // Remove country code if present (91 for India)
     if (cleaned.startsWith('91') && cleaned.length === 12) {
-      return cleaned.substring(2);
+      cleaned = cleaned.substring(2)
     }
     
-    // Ensure 10-digit format
-    if (cleaned.length === 10) {
-      return cleaned;
+    // Ensure it's a 10-digit number
+    if (cleaned.length !== 10) {
+      Logger.warn(DataSource.API, 'smsfresh', `Invalid phone number format: ${phone}`)
     }
     
-    throw new Error(`Invalid phone number format: ${phone}`);
+    return cleaned
   }
 
-  private async executeWithRetry<T>(
-    operation: () => Promise<T>,
-    attempt: number = 1
-  ): Promise<T> {
-    try {
-      return await operation();
-    } catch (error) {
-      if (attempt < this.config.retryAttempts!) {
-        const delay = Math.pow(2, attempt) * 1000; // Exponential backoff
-        logger.warn(`SMSFresh API retry attempt ${attempt + 1} after ${delay}ms`, error);
-        
-        await new Promise(resolve => setTimeout(resolve, delay));
-        return this.executeWithRetry(operation, attempt + 1);
-      }
-      throw error;
-    }
+  /**
+   * Extract message ID from SMSFresh response
+   */
+  private extractMessageId(response: string): string {
+    // SMSFresh typically returns a response with message ID
+    // This is a basic implementation - adjust based on actual response format
+    const match = response.match(/id[:\s]*(\w+)/i)
+    return match ? match[1] : `msg_${Date.now()}`
   }
 
-  private extractErrorMessage(error: any): string {
-    if (error.response?.data?.message) {
-      return error.response.data.message;
-    }
-    if (error.response?.data?.error) {
-      return error.response.data.error;
-    }
-    if (error.message) {
-      return error.message;
-    }
-    return 'Unknown error occurred';
+  /**
+   * Utility function to add delay
+   */
+  private delay(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms))
   }
 
-  private extractErrorCode(error: any): string {
-    if (error.response?.data?.code) {
-      return error.response.data.code;
-    }
-    if (error.response?.status) {
-      return `HTTP_${error.response.status}`;
-    }
-    if (error.code) {
-      return error.code;
-    }
-    return 'UNKNOWN_ERROR';
-  }
-
-  private isValidMediaUrl(url: string): boolean {
-    try {
-      const parsedUrl = new URL(url);
-      return ['http:', 'https:'].includes(parsedUrl.protocol);
-    } catch {
-      return false;
-    }
-  }
-
-  private isValidOTP(otp: string): boolean {
-    // OTP should be 4-8 digits
-    return /^\d{4,8}$/.test(otp);
-  }
-
-  private async logMessageSend(
-    result: Partial<SMSFreshResponse>,
-    payload: any,
-    type: string,
-    error?: any
-  ): Promise<void> {
-    try {
-      // Create audit log entry
-      const logData = {
-        type: 'SMSFRESH_API_CALL',
-        action: `send_${type}`,
-        success: result.success || false,
-        messageId: result.messageId,
-        errorCode: result.errorCode,
-        error: result.error,
-        payload: {
-          recipients: payload.recipients || payload.recipient,
-          template: payload.template,
-          messageType: type,
-        },
-        timestamp: new Date().toISOString(),
-      };
-
-      // Log to application logger
-      if (result.success) {
-        logger.info('SMSFresh message sent successfully', logData);
-      } else {
-        logger.error('SMSFresh message send failed', { ...logData, error });
-      }
-
-      // Store in database for audit trail (optional, based on requirements)
-      // This could be implemented if audit logging to database is required
-      
-    } catch (logError) {
-      logger.error('Failed to log message send', logError);
-      // Don't throw error as logging failure shouldn't break message sending
+  /**
+   * Get service status and configuration
+   */
+  getStatus(): {
+    configured: boolean
+    baseUrl: string
+    user: string
+    sender: string
+  } {
+    return {
+      configured: !!(this.user && this.pass),
+      baseUrl: this.baseUrl,
+      user: this.user,
+      sender: this.sender
     }
   }
 }
 
-// Singleton instance
-let smsFreshServiceInstance: SMSFreshService | null = null;
-
-export function createSMSFreshService(config?: Partial<SMSFreshConfig>): SMSFreshService {
-  if (!smsFreshServiceInstance || config) {
-    const defaultConfig: SMSFreshConfig = {
-      apiKey: process.env.SMSFRESH_API_KEY || '',
-      apiUrl: process.env.SMSFRESH_API_URL || '',
-      timeout: 30000,
-      retryAttempts: 3,
-      enableQueue: process.env.NODE_ENV === 'production', // Enable queue in production
-      maxQueueSize: 1000,
-      ...config,
-    };
-
-    if (!defaultConfig.apiKey || !defaultConfig.apiUrl) {
-      throw new Error('SMSFresh API configuration is missing. Please set SMSFRESH_API_KEY and SMSFRESH_API_URL environment variables.');
-    }
-
-    smsFreshServiceInstance = new SMSFreshService(defaultConfig);
-  }
-
-  return smsFreshServiceInstance;
-}
-
-/**
- * Create a fallback SMS service for when WhatsApp is unavailable
- */
-export function createFallbackSMSService(): {
-  sendSMS: (params: SMSFreshTextParams, priority?: 'low' | 'normal' | 'high' | 'urgent') => Promise<SMSFreshResponse>;
-  isAvailable: () => Promise<boolean>;
-} {
-  const smsService = createSMSFreshService();
-  
-  return {
-    sendSMS: (params: SMSFreshTextParams, priority = 'normal') => smsService.sendSMS(params, priority),
-    isAvailable: async () => {
-      try {
-        const balanceResult = await smsService.getAccountBalance();
-        return balanceResult.success;
-      } catch {
-        return false;
-      }
-    }
-  };
-}
-
-export { SMSFreshService };
+// Export singleton instance
+export const smsFreshService = new SMSFreshService()
+export default smsFreshService

@@ -1,78 +1,94 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createSMSFreshService } from '@/lib/smsFreshService'
+import smsFreshService from '@/lib/smsFreshService'
+import Logger, { DataSource } from '@/lib/logger'
 
-export async function POST(request: NextRequest) {
+export async function GET(request: NextRequest) {
   try {
-    const { phone, message } = await request.json()
+    Logger.info(DataSource.API, 'test_whatsapp', 'Testing WhatsApp API configuration')
+
+    // Test the SMSFresh service connection
+    const connectionTest = await smsFreshService.testConnection()
     
-    if (!phone || !message) {
-      return NextResponse.json(
-        { success: false, error: 'Phone and message are required' },
-        { status: 400 }
-      )
-    }
-
-    // Check if SMSFresh is configured
-    const apiKey = process.env.SMSFRESH_API_KEY
-    const apiUrl = process.env.SMSFRESH_API_URL
+    // Get service status
+    const status = smsFreshService.getStatus()
     
-    if (!apiKey || !apiUrl) {
-      return NextResponse.json({
-        success: false,
-        error: 'SMSFresh API not configured',
-        configured: false,
-        message: 'Please set SMSFRESH_API_KEY and SMSFRESH_API_URL environment variables'
-      })
+    // Get available templates
+    const templates = await smsFreshService.getTemplates()
+
+    const response = {
+      status: connectionTest.success ? 'ready' : 'error',
+      message: connectionTest.message,
+      configuration: {
+        configured: status.configured,
+        baseUrl: status.baseUrl,
+        user: status.user,
+        sender: status.sender
+      },
+      templates: {
+        count: templates.length,
+        available: templates.map(t => ({
+          name: t.name,
+          category: t.category,
+          status: t.status
+        }))
+      },
+      connectionTest: connectionTest.details
     }
 
-    try {
-      const smsFreshService = createSMSFreshService()
-      
-      // Test sending a WhatsApp message
-      const result = await smsFreshService.sendWhatsAppText({
-        phone: [phone],
-        templateName: 'test_template',
-        parameters: [message]
-      })
-
-      return NextResponse.json({
-        success: result.success,
-        configured: true,
-        result,
-        message: result.success ? 'WhatsApp API is working' : 'WhatsApp API failed'
-      })
-    } catch (apiError) {
-      return NextResponse.json({
-        success: false,
-        configured: true,
-        error: 'API call failed',
-        details: apiError instanceof Error ? apiError.message : 'Unknown error',
-        message: 'SMSFresh API is configured but the test call failed'
-      })
+    if (connectionTest.success) {
+      Logger.success(DataSource.API, 'test_whatsapp', 'WhatsApp API test completed successfully')
+    } else {
+      Logger.warn(DataSource.API, 'test_whatsapp', 'WhatsApp API test failed', connectionTest)
     }
+
+    return NextResponse.json(response)
+
   } catch (error) {
-    console.error('WhatsApp test error:', error)
-    return NextResponse.json(
-      { success: false, error: 'Internal server error' },
-      { status: 500 }
-    )
+    Logger.error(DataSource.API, 'test_whatsapp', 'WhatsApp API test failed', error)
+    
+    return NextResponse.json({
+      status: 'error',
+      message: 'Failed to test WhatsApp API',
+      error: error instanceof Error ? error.message : 'Unknown error'
+    }, { status: 500 })
   }
 }
 
-export async function GET() {
-  const apiKey = process.env.SMSFRESH_API_KEY
-  const apiUrl = process.env.SMSFRESH_API_URL
-  const webhookSecret = process.env.SMSFRESH_WEBHOOK_SECRET
-  
-  return NextResponse.json({
-    configured: {
-      apiKey: !!apiKey,
-      apiUrl: !!apiUrl,
-      webhookSecret: !!webhookSecret
-    },
-    status: (apiKey && apiUrl) ? 'ready' : 'needs_configuration',
-    message: (apiKey && apiUrl) 
-      ? 'SMSFresh API is configured and ready to use'
-      : 'SMSFresh API needs configuration. Please set environment variables.'
-  })
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json()
+    const { phone, message, templateName, params } = body
+
+    if (!phone || (!message && !templateName)) {
+      return NextResponse.json({
+        success: false,
+        error: 'Phone number and message/template are required'
+      }, { status: 400 })
+    }
+
+    Logger.info(DataSource.API, 'test_whatsapp', `Sending test WhatsApp message to ${phone}`)
+
+    let result
+    if (templateName) {
+      result = await smsFreshService.sendTemplateMessage(phone, templateName, params)
+    } else {
+      result = await smsFreshService.sendTextMessage(phone, message)
+    }
+
+    if (result.success) {
+      Logger.success(DataSource.API, 'test_whatsapp', `Test WhatsApp message sent successfully to ${phone}`)
+    } else {
+      Logger.error(DataSource.API, 'test_whatsapp', `Test WhatsApp message failed for ${phone}`, result.error)
+    }
+
+    return NextResponse.json(result)
+
+  } catch (error) {
+    Logger.error(DataSource.API, 'test_whatsapp', 'Test WhatsApp message sending failed', error)
+    
+    return NextResponse.json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error'
+    }, { status: 500 })
+  }
 }
