@@ -259,43 +259,43 @@ function ContactsPageContent() {
     <AdminLayout>
       <div className="space-y-6">
         {/* Header */}
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Contact Management</h1>
-            <p className="text-gray-600 mt-1">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center space-y-4 sm:space-y-0">
+          <div className="flex-1">
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Contact Management</h1>
+            <p className="text-gray-600 mt-1 text-sm sm:text-base">
               Manage your contact database with advanced filtering and bulk operations
             </p>
           </div>
-          <div className="flex items-center space-x-3">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center space-y-2 sm:space-y-0 sm:space-x-3">
             <button
               onClick={() => setShowImportExport(true)}
-              className="btn-secondary flex items-center"
+              className="btn-secondary flex items-center justify-center"
             >
               <Upload className="w-4 h-4 mr-2" />
               Import/Export
             </button>
             <button 
               onClick={handleAddContact}
-              className="btn-primary flex items-center"
+              className="btn-primary flex items-center justify-center"
             >
-              <Plus className="w-5 h-5 mr-2" />
+              <Plus className="w-4 h-4 sm:w-5 sm:h-5 mr-2" />
               Add Contact
             </button>
           </div>
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4 lg:gap-6">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="bg-white rounded-xl shadow-sm border border-gray-100 p-6"
+            className="bg-white rounded-lg sm:rounded-xl shadow-sm border border-gray-100 p-3 sm:p-4 lg:p-6"
           >
             <div className="flex items-center">
-              <Users className="w-8 h-8 text-blue-500 mr-3" />
-              <div>
-                <p className="text-sm font-medium text-gray-600">Total Contacts</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
+              <Users className="w-6 h-6 sm:w-8 sm:h-8 text-blue-500 mr-2 sm:mr-3 flex-shrink-0" />
+              <div className="min-w-0">
+                <p className="text-xs sm:text-sm font-medium text-gray-600 truncate">Total Contacts</p>
+                <p className="text-lg sm:text-xl lg:text-2xl font-bold text-gray-900">{stats.total}</p>
               </div>
             </div>
           </motion.div>
@@ -304,13 +304,13 @@ function ContactsPageContent() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
-            className="bg-white rounded-xl shadow-sm border border-gray-100 p-6"
+            className="bg-white rounded-lg sm:rounded-xl shadow-sm border border-gray-100 p-3 sm:p-4 lg:p-6"
           >
             <div className="flex items-center">
-              <CheckCircle className="w-8 h-8 text-green-500 mr-3" />
-              <div>
-                <p className="text-sm font-medium text-gray-600">Active</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.active}</p>
+              <CheckCircle className="w-6 h-6 sm:w-8 sm:h-8 text-green-500 mr-2 sm:mr-3 flex-shrink-0" />
+              <div className="min-w-0">
+                <p className="text-xs sm:text-sm font-medium text-gray-600 truncate">Active</p>
+                <p className="text-lg sm:text-xl lg:text-2xl font-bold text-gray-900">{stats.active}</p>
               </div>
             </div>
           </motion.div>
@@ -319,13 +319,13 @@ function ContactsPageContent() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
-            className="bg-white rounded-xl shadow-sm border border-gray-100 p-6"
+            className="bg-white rounded-lg sm:rounded-xl shadow-sm border border-gray-100 p-3 sm:p-4 lg:p-6"
           >
             <div className="flex items-center">
-              <Clock className="w-8 h-8 text-yellow-500 mr-3" />
-              <div>
-                <p className="text-sm font-medium text-gray-600">Inactive</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.inactive}</p>
+              <Clock className="w-6 h-6 sm:w-8 sm:h-8 text-yellow-500 mr-2 sm:mr-3 flex-shrink-0" />
+              <div className="min-w-0">
+                <p className="text-xs sm:text-sm font-medium text-gray-600 truncate">Inactive</p>
+                <p className="text-lg sm:text-xl lg:text-2xl font-bold text-gray-900">{stats.inactive}</p>
               </div>
             </div>
           </motion.div>
@@ -334,13 +334,13 @@ function ContactsPageContent() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3 }}
-            className="bg-white rounded-xl shadow-sm border border-gray-100 p-6"
+            className="bg-white rounded-lg sm:rounded-xl shadow-sm border border-gray-100 p-3 sm:p-4 lg:p-6"
           >
             <div className="flex items-center">
-              <XCircle className="w-8 h-8 text-red-500 mr-3" />
-              <div>
-                <p className="text-sm font-medium text-gray-600">Blocked</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.blocked}</p>
+              <XCircle className="w-6 h-6 sm:w-8 sm:h-8 text-red-500 mr-2 sm:mr-3 flex-shrink-0" />
+              <div className="min-w-0">
+                <p className="text-xs sm:text-sm font-medium text-gray-600 truncate">Blocked</p>
+                <p className="text-lg sm:text-xl lg:text-2xl font-bold text-gray-900">{stats.blocked}</p>
               </div>
             </div>
           </motion.div>
@@ -349,13 +349,13 @@ function ContactsPageContent() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.4 }}
-            className="bg-white rounded-xl shadow-sm border border-gray-100 p-6"
+            className="bg-white rounded-lg sm:rounded-xl shadow-sm border border-gray-100 p-3 sm:p-4 lg:p-6 col-span-2 sm:col-span-1"
           >
             <div className="flex items-center">
-              <MessageSquare className="w-8 h-8 text-purple-500 mr-3" />
-              <div>
-                <p className="text-sm font-medium text-gray-600">Avg Response</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.avgResponseRate}%</p>
+              <MessageSquare className="w-6 h-6 sm:w-8 sm:h-8 text-purple-500 mr-2 sm:mr-3 flex-shrink-0" />
+              <div className="min-w-0">
+                <p className="text-xs sm:text-sm font-medium text-gray-600 truncate">Avg Response</p>
+                <p className="text-lg sm:text-xl lg:text-2xl font-bold text-gray-900">{stats.avgResponseRate}%</p>
               </div>
             </div>
           </motion.div>

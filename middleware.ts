@@ -88,6 +88,7 @@ export function middleware(request: NextRequest) {
   if (!requiredRoles.includes(payload.role)) {
     if (pathname.startsWith('/admin')) {
       // Redirect to dashboard if user doesn't have access to specific admin page
+      console.log(`🔄 Middleware: User ${payload.email} (${payload.role}) denied access to ${pathname}, redirecting to dashboard`)
       return NextResponse.redirect(new URL('/admin/dashboard', request.url))
     }
     return NextResponse.json(
@@ -129,13 +130,39 @@ function getRequiredRoles(pathname: string): string[] | null {
     }
   }
 
-  // Default protection for admin routes
+  // Special handling for admin routes - be more specific about what employees can access
   if (pathname.startsWith('/admin/')) {
+    // Admin-only routes
+    const adminOnlyRoutes = ['/admin/campaigns', '/admin/contacts', '/admin/import', '/admin/analytics', '/admin/automation', '/admin/settings']
+    if (adminOnlyRoutes.some(route => pathname.startsWith(route))) {
+      return ['ADMIN']
+    }
+    
+    // Employee accessible routes
+    const employeeRoutes = ['/admin/dashboard', '/admin/messages', '/admin/leads']
+    if (employeeRoutes.some(route => pathname.startsWith(route))) {
+      return ['ADMIN', 'EMPLOYEE']
+    }
+    
+    // Default for other admin routes - allow both roles
     return ['ADMIN', 'EMPLOYEE']
   }
 
-  // Default protection for API routes
+  // Special handling for API routes
   if (pathname.startsWith('/api/')) {
+    // Admin-only API routes
+    const adminOnlyApiRoutes = ['/api/campaigns', '/api/contacts', '/api/automations', '/api/analytics']
+    if (adminOnlyApiRoutes.some(route => pathname.startsWith(route))) {
+      return ['ADMIN']
+    }
+    
+    // Employee accessible API routes
+    const employeeApiRoutes = ['/api/dashboard', '/api/messages', '/api/leads']
+    if (employeeApiRoutes.some(route => pathname.startsWith(route))) {
+      return ['ADMIN', 'EMPLOYEE']
+    }
+    
+    // Default for other API routes - allow both roles
     return ['ADMIN', 'EMPLOYEE']
   }
 
